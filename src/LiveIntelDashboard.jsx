@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { AGENTS, OSINT_SOURCES, REFRESH_INTERVAL, MAX_LOG_ENTRIES, SEVERITY } from "./config";
-import { AgentManager, verifyIntel, fetchOSINTFromX } from "./api";
+import { AgentManager, verifyIntel } from "./api";
 
 // ════════════════════════════════════════════════════════════
 // SUB-COMPONENTS
@@ -852,7 +852,27 @@ export default function LiveIntelDashboard() {
             <div style={{ display: "flex", flexDirection: "column", gap: 16, animation: "fadeIn 0.3s ease" }}>
               {analysis && <AnalysisPanel analysis={analysis} />}
               {!analysis && totalItems === 0 && (
-                <LoadingScreen />
+                <>
+                  <LoadingScreen />
+                  {/* Show errors if any agents failed */}
+                  {logs.filter((l) => l.type === "error").length > 0 && (
+                    <div style={{
+                      margin: "0 auto", maxWidth: 500, padding: "14px 18px",
+                      background: "rgba(255,23,68,0.08)", border: "1px solid rgba(255,23,68,0.2)",
+                      borderRadius: "var(--radius)", textAlign: "left",
+                    }}>
+                      <div style={{ fontFamily: "var(--mono)", fontSize: "0.6rem", letterSpacing: 2, color: "#ff1744", marginBottom: 8 }}>ERORI DETECTATE</div>
+                      {logs.filter((l) => l.type === "error").slice(-5).map((l, i) => (
+                        <div key={i} style={{ fontFamily: "var(--mono)", fontSize: "0.62rem", color: "rgba(255,255,255,0.6)", marginBottom: 3, wordBreak: "break-all" }}>
+                          {l.message}
+                        </div>
+                      ))}
+                      <div style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "var(--text-muted)", marginTop: 8 }}>
+                        Verifică: API key valid, credit Anthropic, env var pe Vercel
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
               {/* Top critical items */}
               {criticalItems > 0 && (
