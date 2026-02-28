@@ -44,6 +44,42 @@ function AgentStatusDot({ status, color }) {
 // ── API Key Modal ──
 function ApiKeyModal({ onSubmit }) {
   const [key, setKey] = useState("");
+  const [testStatus, setTestStatus] = useState(null); // null | "testing" | {ok, message}
+
+  const testConnection = async () => {
+    setTestStatus("testing");
+    try {
+      // 1. Test serverless function health
+      const healthRes = await fetch("/api/claude");
+      const health = await healthRes.json();
+
+      if (!healthRes.ok) {
+        setTestStatus({ ok: false, message: `Serverless function error: ${JSON.stringify(health)}` });
+        return;
+      }
+
+      // 2. Test actual API call
+      const apiRes = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": key.trim() || "test" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-5-20250514",
+          max_tokens: 30,
+          messages: [{ role: "user", content: "Say OK" }],
+        }),
+      });
+      const apiData = await apiRes.json();
+
+      if (apiRes.ok && apiData.content) {
+        setTestStatus({ ok: true, message: `Conexiune OK! API key valid. (${health.hasApiKey ? "ENV var setat" : "folosește key din browser"})` });
+      } else {
+        setTestStatus({ ok: false, message: `API error ${apiRes.status}: ${apiData.error?.message || apiData.error || JSON.stringify(apiData).slice(0, 200)}` });
+      }
+    } catch (err) {
+      setTestStatus({ ok: false, message: `Eroare conexiune: ${err.message}` });
+    }
+  };
+
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 9999,
@@ -91,11 +127,44 @@ function ApiKeyModal({ onSubmit }) {
           Cheia este stocată doar local în browser. Necesită acces la Web Search.
         </p>
 
+        {/* Test connection button */}
+        <button
+          onClick={testConnection}
+          disabled={testStatus === "testing"}
+          style={{
+            width: "100%", marginTop: 16, padding: "10px 0", borderRadius: 8,
+            background: "rgba(79,195,247,0.1)", border: "1px solid rgba(79,195,247,0.25)",
+            color: "#4fc3f7", fontFamily: "var(--mono)", fontSize: "0.7rem", fontWeight: 600,
+            letterSpacing: 1, cursor: testStatus === "testing" ? "wait" : "pointer",
+          }}
+        >
+          {testStatus === "testing" ? "⟳ TESTARE CONEXIUNE..." : "🔍 TESTEAZĂ CONEXIUNEA"}
+        </button>
+
+        {/* Test result */}
+        {testStatus && testStatus !== "testing" && (
+          <div style={{
+            marginTop: 10, padding: "10px 14px", borderRadius: 6,
+            background: testStatus.ok ? "rgba(105,240,174,0.08)" : "rgba(255,23,68,0.08)",
+            border: `1px solid ${testStatus.ok ? "rgba(105,240,174,0.2)" : "rgba(255,23,68,0.2)"}`,
+          }}>
+            <div style={{
+              fontFamily: "var(--mono)", fontSize: "0.65rem", fontWeight: 700,
+              color: testStatus.ok ? "#69f0ae" : "#ff1744", marginBottom: 4,
+            }}>
+              {testStatus.ok ? "✓ CONEXIUNE REUȘITĂ" : "✗ CONEXIUNE EȘUATĂ"}
+            </div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: "0.6rem", color: "var(--text-secondary)", wordBreak: "break-all" }}>
+              {testStatus.message}
+            </div>
+          </div>
+        )}
+
         <button
           onClick={() => key.trim() && onSubmit(key.trim())}
           disabled={!key.trim()}
           style={{
-            width: "100%", marginTop: 20, padding: "12px 0", borderRadius: 8,
+            width: "100%", marginTop: 16, padding: "12px 0", borderRadius: 8,
             background: key.trim() ? "linear-gradient(135deg, #ff3b3b, #ff6b35)" : "rgba(255,255,255,0.05)",
             color: key.trim() ? "#fff" : "rgba(255,255,255,0.3)",
             fontFamily: "var(--mono)", fontSize: "0.8rem", fontWeight: 700,
