@@ -1,41 +1,31 @@
 // ============================================================
-// INTEL LIVE — API Layer & Agent System
+// INTEL LIVE — API Layer & Agent System (Gemini Engine)
 // ============================================================
 
 import { AGENTS, NEWS_SOURCES, ITEMS_PER_AGENT_QUERY } from "./config";
 
 const API_PATH = "/api/claude";
 
-// ── Delay helper ──
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ── Core API Call ──
-async function callClaude(apiKey, messages, useWebSearch = true, maxTokens = 1500) {
-  const body = {
-    model: "claude-sonnet-4-5-20250514",
-    max_tokens: maxTokens,
-    messages,
-  };
-  if (useWebSearch) {
-    body.tools = [{ type: "web_search_20250305", name: "web_search" }];
-  }
-
+// ── Core Gemini Call ──
+async function callGemini(apiKey, prompt, useGrounding = true) {
   const res = await fetch(API_PATH, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-api-key": apiKey,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ prompt, useGrounding }),
   });
 
   if (!res.ok) {
-    const errText = await res.text().catch(() => "Unknown error");
-    throw new Error(`API ${res.status}: ${errText.slice(0, 200)}`);
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(`API ${res.status}: ${errData.error || "Unknown error"}`);
   }
+
   const data = await res.json();
-  const textBlocks = data.content?.filter((b) => b.type === "text").map((b) => b.text).join("\n");
-  return textBlocks || "";
+  return data.text || "";
 }
 
 function parseJSON(raw) {
@@ -44,7 +34,7 @@ function parseJSON(raw) {
   try {
     return JSON.parse(clean);
   } catch {
-    const arrMatch = clean.match(/\[[\s\S]*\]/);
+    const arrMatch = clean.match(/\[[\s\S]*?\]/);
     if (arrMatch) try { return JSON.parse(arrMatch[0]); } catch {}
     const objMatch = clean.match(/\{[\s\S]*\}/);
     if (objMatch) try { return JSON.parse(objMatch[0]); } catch {}
@@ -52,20 +42,21 @@ function parseJSON(raw) {
   }
 }
 
-// ── Single Agent: ONE combined query (not multiple) ──
+// ── Single Agent Query ──
 async function runAgentQuery(apiKey, agent) {
   const allQueries = agent.queries.join(" OR ");
   const sourceMentions = agent.sources.map((s) => `@${s}`).join(", ");
 
-  const prompt = `Search for the very latest breaking news about: "${allQueries}".
-Today is February 28, 2026. Focus on the most recent updates.
-Credible OSINT sources: ${sourceMentions}. Also check: ${NEWS_SOURCES.slice(0, 4).join(", ")}
+  const prompt = `Search the web for the very latest breaking news about: "${allQueries}".
+Today is ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}.
+Focus on the most recent updates from the last few hours.
+Credible OSINT sources to check: ${sourceMentions}. Also check: ${NEWS_SOURCES.slice(0, 4).join(", ")}
 
 Return ONLY a valid JSON array of ${ITEMS_PER_AGENT_QUERY} most important recent updates.
-Each item: {"headline":"<title>","summary":"<2-3 sentences>","source":"<outlet>","time":"<e.g. 2 hours ago>","severity":<1-5>,"verified":<boolean>,"location":"<place>"}
-ONLY the JSON array. No markdown.`;
+Each item must be: {"headline":"<title>","summary":"<2-3 sentences>","source":"<outlet>","time":"<e.g. 2 hours ago>","severity":<1-5>,"verified":<boolean>,"location":"<place>"}
+Return ONLY the JSON array. No markdown, no explanation, no extra text.`;
 
-  const text = await callClaude(apiKey, [{ role: "user", content: prompt }], true, 1200);
+  const text = await callGemini(apiKey, prompt, true);
   const items = parseJSON(text);
   if (!Array.isArray(items)) return [];
   return items.map((item) => ({
@@ -91,7 +82,7 @@ async function runAgent(apiKey, agent, onProgress) {
   }
 }
 
-// ── Run agents in BATCHES of 2 (avoid rate limits) ──
+// ── Run agents in BATCHES of 2 ──
 export async function runAllAgents(apiKey, onAgentProgress) {
   const allResults = {};
   const batchSize = 2;
@@ -103,8 +94,7 @@ export async function runAllAgents(apiKey, onAgentProgress) {
       allResults[agent.id] = items;
     });
     await Promise.allSettled(promises);
-    // Small delay between batches to avoid rate limits
-    if (i + batchSize < AGENTS.length) await delay(1000);
+    if (i + batchSize < AGENTS.length) await delay(500);
   }
   return allResults;
 }
@@ -131,31 +121,31 @@ export async function runAnalysis(apiKey, allIntel) {
   const critical = Object.values(allIntel).flat().filter((i) => i.severity >= 4).length;
 
   const prompt = `You are an elite military intelligence analyst.
-Based on these ${total} reports (${critical} critical) about the Iran-Israel-US conflict, Feb 28 2026:
+Based on these ${total} reports (${critical} critical) about the Iran-Israel-US conflict:
 
 ${summaryParts}
 
-Return ONLY valid JSON (no markdown):
+Return ONLY valid JSON (no markdown, no backticks, no explanation):
 {"threat_level":<1-10>,"threat_label":"<DEFCON label>","situation_summary":"<3 sentences in Romanian>","timeline_last_24h":["<4 events in Romanian>"],"next_hours_prediction":"<3 sentences Romanian>","next_days_prediction":"<3 sentences Romanian>","key_risks":["<5 risks Romanian>"],"escalation_probability":<0-100>,"nuclear_risk":<0-100>,"oil_impact":"<2 sentences Romanian>","proxy_status":"<2 sentences Romanian>","diplomatic_status":"<2 sentences Romanian>","civilian_impact":"<2 sentences Romanian>","breaking_alerts":["<3 breaking headlines Romanian>"],"recommendation":"<2 sentences Romanian>"}`;
 
-  const text = await callClaude(apiKey, [{ role: "user", content: prompt }], false, 2000);
+  const text = await callGemini(apiKey, prompt, false);
   return parseJSON(text);
 }
 
 // ── Verify item ──
 export async function verifyIntel(apiKey, item) {
-  const prompt = `Verify this intel: "${item.headline}" - ${item.summary} (Source: ${item.source})
-Search for corroboration. Return ONLY JSON: {"verified":<bool>,"confidence":<0-100>,"corroborating_sources":["<sources>"],"notes":"<note in Romanian>"}`;
-  const text = await callClaude(apiKey, [{ role: "user", content: prompt }], true, 600);
+  const prompt = `Verify this intelligence report: "${item.headline}" - ${item.summary} (Source: ${item.source})
+Search the web for corroboration. Return ONLY JSON: {"verified":<bool>,"confidence":<0-100>,"corroborating_sources":["<sources>"],"notes":"<note in Romanian>"}`;
+  const text = await callGemini(apiKey, prompt, true);
   return parseJSON(text);
 }
 
 // ── Breaking news for ticker ──
 export async function fetchBreakingNews(apiKey) {
-  const prompt = `Search for absolute latest breaking news about Iran-Israel-US war, February 28 2026.
-Check Reuters, AP, Al Jazeera, BBC, @sentdefender, @IntelCrab on X.
-Return ONLY JSON array: [{"text":"<headline Romanian max 20 words>","severity":<1-5>,"time":"<when>"}] (6 items)`;
-  const text = await callClaude(apiKey, [{ role: "user", content: prompt }], true, 800);
+  const prompt = `Search the web for absolute latest breaking news about Iran-Israel-US conflict right now.
+Check Reuters, AP, Al Jazeera, BBC, X/Twitter OSINT accounts.
+Return ONLY a JSON array (no markdown): [{"text":"<headline Romanian max 20 words>","severity":<1-5>,"time":"<when>"}] — exactly 6 items.`;
+  const text = await callGemini(apiKey, prompt, true);
   const items = parseJSON(text);
   return Array.isArray(items) ? items : [];
 }
@@ -178,7 +168,7 @@ export class AgentManager {
 
   async runFullCycle() {
     this.cycleCount++;
-    this.log(`Ciclul #${this.cycleCount} — Lansare agenți (batch x2)...`, "system");
+    this.log(`Ciclul #${this.cycleCount} — Lansare agenți (Gemini + Grounding)...`, "system");
 
     try {
       const results = await runAllAgents(this.apiKey, (progress) => {
@@ -191,8 +181,6 @@ export class AgentManager {
       });
 
       const totalItems = Object.values(results).flat().length;
-
-      // Only run analysis if we got data
       let analysisResult = null;
       let breakingResult = [];
 
@@ -220,14 +208,14 @@ export class AgentManager {
 
       this.log(`Ciclu #${this.cycleCount} complet — ${totalItems} rapoarte`, totalItems > 0 ? "success" : "error");
     } catch (err) {
-      this.log(`Eroare ciclul #${this.cycleCount}: ${err.message}`, "error");
+      this.log(`Eroare ciclu #${this.cycleCount}: ${err.message}`, "error");
     }
   }
 
   start(intervalSec = 60) {
     if (this.running) return;
     this.running = true;
-    this.log("Sistem pornit — Agenți activați", "system");
+    this.log("Sistem pornit — Engine: Gemini 2.0 Flash + Google Grounding", "system");
     this.runFullCycle();
     const timer = setInterval(() => {
       if (this.running) this.runFullCycle();

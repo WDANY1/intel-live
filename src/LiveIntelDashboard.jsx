@@ -58,22 +58,18 @@ function ApiKeyModal({ onSubmit }) {
         return;
       }
 
-      // 2. Test actual API call
+      // 2. Test actual Gemini API call
       const apiRes = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": key.trim() || "test" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-5-20250514",
-          max_tokens: 30,
-          messages: [{ role: "user", content: "Say OK" }],
-        }),
+        body: JSON.stringify({ prompt: "Say OK", useGrounding: false }),
       });
       const apiData = await apiRes.json();
 
-      if (apiRes.ok && apiData.content) {
-        setTestStatus({ ok: true, message: `Conexiune OK! API key valid. (${health.hasApiKey ? "ENV var setat" : "folosește key din browser"})` });
+      if (apiRes.ok && apiData.text) {
+        setTestStatus({ ok: true, message: `Conexiune OK! Gemini activ. (${health.hasApiKey ? "ENV var setat" : "key din browser"})` });
       } else {
-        setTestStatus({ ok: false, message: `API error ${apiRes.status}: ${apiData.error?.message || apiData.error || JSON.stringify(apiData).slice(0, 200)}` });
+        setTestStatus({ ok: false, message: `API error ${apiRes.status}: ${apiData.error || JSON.stringify(apiData).slice(0, 200)}` });
       }
     } catch (err) {
       setTestStatus({ ok: false, message: `Eroare conexiune: ${err.message}` });
@@ -105,14 +101,14 @@ function ApiKeyModal({ onSubmit }) {
         </p>
 
         <label style={{ display: "block", fontFamily: "var(--mono)", fontSize: "0.65rem", letterSpacing: 2, color: "var(--text-muted)", marginBottom: 8 }}>
-          ANTHROPIC API KEY
+          GEMINI API KEY
         </label>
         <input
           type="password"
           value={key}
           onChange={(e) => setKey(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && key.trim() && onSubmit(key.trim())}
-          placeholder="sk-ant-..."
+          placeholder="AIzaSy..."
           style={{
             width: "100%", padding: "12px 16px", borderRadius: 8,
             background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
@@ -124,7 +120,7 @@ function ApiKeyModal({ onSubmit }) {
           autoFocus
         />
         <p style={{ color: "var(--text-dim)", fontSize: "0.65rem", marginTop: 8, fontFamily: "var(--mono)" }}>
-          Cheia este stocată doar local în browser. Necesită acces la Web Search.
+          Ia cheia de pe aistudio.google.com/apikey — gratuit, include Web Search.
         </p>
 
         {/* Test connection button */}
@@ -1054,7 +1050,7 @@ export default function LiveIntelDashboard() {
         background: "rgba(0,0,0,0.3)",
       }}>
         <span style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "var(--text-dim)", letterSpacing: 1 }}>
-          INTEL LIVE • 7 AGENȚI AI • 70+ SURSE OSINT • AUTO-REFRESH {REFRESH_INTERVAL}s
+          INTEL LIVE • GEMINI 2.0 FLASH + GROUNDING • 7 AGENȚI • 70+ SURSE OSINT • AUTO-REFRESH {REFRESH_INTERVAL}s
         </span>
         <span style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "var(--text-dim)", letterSpacing: 1 }}>
           DOAR PENTRU INFORMARE • NU CONSTITUIE CONSILIERE MILITARĂ
