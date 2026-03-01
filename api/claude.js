@@ -73,15 +73,16 @@ export default async function handler(req, res) {
       });
     };
 
-    let response = await makeRequest(model);
-    let data = await response.json();
-    let usedModel = model;
+    // Try requested model, then fallback through other models on 404/429/503
+    const RETRY_CODES = [404, 429, 503];
+    const tryOrder = [model, ...ALLOWED_MODELS.filter((m) => m !== model)];
+    let response, data, usedModel;
 
-    // Fallback: if model returns 404 or 503, retry with DEFAULT_MODEL
-    if (!response.ok && (response.status === 404 || response.status === 503) && model !== DEFAULT_MODEL) {
-      response = await makeRequest(DEFAULT_MODEL);
+    for (const tryModel of tryOrder) {
+      response = await makeRequest(tryModel);
       data = await response.json();
-      usedModel = DEFAULT_MODEL;
+      usedModel = tryModel;
+      if (response.ok || !RETRY_CODES.includes(response.status)) break;
     }
 
     if (!response.ok) {
