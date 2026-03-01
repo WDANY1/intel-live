@@ -45,6 +45,7 @@ function AgentStatusDot({ status, color }) {
 function ApiKeyModal({ onSubmit }) {
   const [key, setKey] = useState("");
   const [testStatus, setTestStatus] = useState(null); // null | "testing" | {ok, message}
+  const sanitizeKey = (k) => k.replace(/[^\x20-\x7E]/g, "").trim();
 
   const testConnection = async () => {
     setTestStatus("testing");
@@ -61,7 +62,7 @@ function ApiKeyModal({ onSubmit }) {
       // 2. Test actual OpenRouter API call
       const apiRes = await fetch("/api/claude", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": key.trim() || "test" },
+        headers: { "Content-Type": "application/json", "x-api-key": sanitizeKey(key) || "test" },
         body: JSON.stringify({ prompt: "Say OK" }),
       });
       const apiData = await apiRes.json();
@@ -106,8 +107,8 @@ function ApiKeyModal({ onSubmit }) {
         <input
           type="password"
           value={key}
-          onChange={(e) => setKey(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && key.trim() && onSubmit(key.trim())}
+          onChange={(e) => setKey(e.target.value.replace(/[^\x20-\x7E]/g, ""))}
+          onKeyDown={(e) => e.key === "Enter" && sanitizeKey(key) && onSubmit(sanitizeKey(key))}
           placeholder="sk-or-..."
           style={{
             width: "100%", padding: "12px 16px", borderRadius: 8,
@@ -157,7 +158,7 @@ function ApiKeyModal({ onSubmit }) {
         )}
 
         <button
-          onClick={() => key.trim() && onSubmit(key.trim())}
+          onClick={() => sanitizeKey(key) && onSubmit(sanitizeKey(key))}
           disabled={!key.trim()}
           style={{
             width: "100%", marginTop: 16, padding: "12px 0", borderRadius: 8,

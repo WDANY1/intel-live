@@ -14,7 +14,7 @@ async function callLLM(apiKey, prompt) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": apiKey,
+      "x-api-key": apiKey.replace(/[^\x20-\x7E]/g, "").trim(),
     },
     body: JSON.stringify({ prompt }),
   });
