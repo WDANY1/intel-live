@@ -120,7 +120,7 @@ function ApiKeyModal({ onSubmit }) {
           autoFocus
         />
         <p style={{ color: "var(--text-dim)", fontSize: "0.65rem", marginTop: 8, fontFamily: "var(--mono)" }}>
-          Ia cheia de pe aistudio.google.com/apikey — gratuit, include Web Search.
+          Ia cheia de pe openrouter.ai/settings/keys — gratuit, model Llama 4 Maverick.
         </p>
 
         {/* Test connection button */}
@@ -1132,7 +1132,7 @@ export default function LiveIntelDashboard() {
                         </div>
                       ))}
                       <div style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "var(--text-muted)", marginTop: 8 }}>
-                        Verifică: API key valid, credit Anthropic, env var pe Vercel
+                        Verifică: API key valid OpenRouter, env var OPENROUTER_API_KEY pe Vercel
                       </div>
                     </div>
                   )}
