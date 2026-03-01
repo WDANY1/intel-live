@@ -512,8 +512,8 @@ export const AI_MODELS = [
     contextWindow: 131072,
   },
   {
-    id: "deepseek/deepseek-r1-0528:free",
-    name: "DeepSeek R1",
+    id: "deepseek/deepseek-r1-zero:free",
+    name: "DeepSeek R1 Zero",
     provider: "DeepSeek",
     color: "#00b894",
     icon: "🟩",
@@ -528,7 +528,7 @@ export const AGENT_MODEL_MAP = {
   osint: "deepseek/deepseek-chat-v3-0324:free",            // Strong analysis
   humint: "qwen/qwq-32b:free",                             // Advanced reasoning for ground reports
   geoint: "mistralai/mistral-small-3.1-24b-instruct:free", // Fast structured data
-  econint: "deepseek/deepseek-r1-0528:free",               // Deep reasoning for economic analysis
+  econint: "deepseek/deepseek-r1-zero:free",                // Deep reasoning for economic analysis
   proxy: "google/gemma-3-27b-it:free",                     // Reliable for proxy monitoring
   diplo: "deepseek/deepseek-chat-v3-0324:free",            // Strong analysis for diplomacy
 };

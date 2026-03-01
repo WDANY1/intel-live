@@ -6,10 +6,11 @@ const DEFAULT_MODEL = "google/gemma-3-27b-it:free";
 const ALLOWED_MODELS = [
   "google/gemma-3-27b-it:free",
   "deepseek/deepseek-chat-v3-0324:free",
-  "meta-llama/llama-4-scout:free",
-  "qwen/qwq-32b:free",
   "mistralai/mistral-small-3.1-24b-instruct:free",
-  "deepseek/deepseek-r1-0528:free",
+  "qwen/qwq-32b:free",
+  "deepseek/deepseek-r1-zero:free",
+  "meta-llama/llama-4-scout:free",
+  "openrouter/free",  // Magic router — auto-selects any working free model
 ];
 
 export default async function handler(req, res) {
@@ -26,7 +27,7 @@ export default async function handler(req, res) {
         status: "ok",
         hasApiKey: !!process.env.OPENROUTER_API_KEY,
         runtime: process.version,
-        engine: "Multi-Model (5 AI — Gemma, DeepSeek, QwQ, Mistral)",
+        engine: "Multi-Model (6 AI + auto-fallback)",
         models: ALLOWED_MODELS,
       });
     }
