@@ -58,16 +58,16 @@ function ApiKeyModal({ onSubmit }) {
         return;
       }
 
-      // 2. Test actual Gemini API call
+      // 2. Test actual Groq API call
       const apiRes = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": key.trim() || "test" },
-        body: JSON.stringify({ prompt: "Say OK", useGrounding: false }),
+        body: JSON.stringify({ prompt: "Say OK" }),
       });
       const apiData = await apiRes.json();
 
       if (apiRes.ok && apiData.text) {
-        setTestStatus({ ok: true, message: `Conexiune OK! Gemini activ. (${health.hasApiKey ? "ENV var setat" : "key din browser"})` });
+        setTestStatus({ ok: true, message: `Conexiune OK! Groq activ. (${health.hasApiKey ? "ENV var setat" : "key din browser"})` });
       } else {
         setTestStatus({ ok: false, message: `API error ${apiRes.status}: ${apiData.error || JSON.stringify(apiData).slice(0, 200)}` });
       }
@@ -101,14 +101,14 @@ function ApiKeyModal({ onSubmit }) {
         </p>
 
         <label style={{ display: "block", fontFamily: "var(--mono)", fontSize: "0.65rem", letterSpacing: 2, color: "var(--text-muted)", marginBottom: 8 }}>
-          GEMINI API KEY
+          GROQ API KEY
         </label>
         <input
           type="password"
           value={key}
           onChange={(e) => setKey(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && key.trim() && onSubmit(key.trim())}
-          placeholder="AIzaSy..."
+          placeholder="gsk_..."
           style={{
             width: "100%", padding: "12px 16px", borderRadius: 8,
             background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
@@ -1050,7 +1050,7 @@ export default function LiveIntelDashboard() {
         background: "rgba(0,0,0,0.3)",
       }}>
         <span style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "var(--text-dim)", letterSpacing: 1 }}>
-          INTEL LIVE • GEMINI 2.0 FLASH + GROUNDING • 7 AGENȚI • 70+ SURSE OSINT • AUTO-REFRESH {REFRESH_INTERVAL}s
+          INTEL LIVE • GROQ LLAMA 3.3 70B • 7 AGENȚI • 70+ SURSE OSINT • AUTO-REFRESH {REFRESH_INTERVAL}s
         </span>
         <span style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "var(--text-dim)", letterSpacing: 1 }}>
           DOAR PENTRU INFORMARE • NU CONSTITUIE CONSILIERE MILITARĂ

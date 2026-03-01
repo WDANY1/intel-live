@@ -1,6 +1,7 @@
-// Vercel Serverless Function — Proxy to Gemini API with Grounding (Web Search)
+// Vercel Serverless Function — Proxy to Groq API (Free, no billing required)
 
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = "llama-3.3-70b-versatile";
 
 export default async function handler(req, res) {
   try {
@@ -14,68 +15,57 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       return res.status(200).json({
         status: "ok",
-        hasApiKey: !!process.env.GEMINI_API_KEY,
+        hasApiKey: !!process.env.GROQ_API_KEY,
         runtime: process.version,
-        engine: "gemini-2.0-flash",
+        engine: MODEL,
       });
     }
 
     if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-    const apiKey = process.env.GEMINI_API_KEY || req.headers["x-api-key"];
+    const apiKey = process.env.GROQ_API_KEY || req.headers["x-api-key"];
     if (!apiKey) {
       return res.status(401).json({
         error: "No API key",
-        hint: "Set GEMINI_API_KEY in Vercel > Settings > Environment Variables",
+        hint: "Set GROQ_API_KEY in Vercel > Settings > Environment Variables",
       });
     }
 
-    const { prompt, useGrounding } = req.body;
+    const { prompt } = req.body;
 
-    // Build Gemini request
-    const geminiBody = {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048,
-      },
-    };
-
-    // Add Google Search grounding when requested
-    if (useGrounding !== false) {
-      geminiBody.tools = [{ google_search: {} }];
-    }
-
-    const url = `${GEMINI_URL}?key=${apiKey}`;
-    const response = await fetch(url, {
+    const response = await fetch(GROQ_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(geminiBody),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an elite military intelligence analyst specializing in Middle East geopolitics, specifically the Iran-Israel-US conflict. Provide detailed, structured intelligence reports. Always respond with valid JSON when asked for JSON. Use your knowledge up to your training cutoff to provide the most recent and relevant analysis.",
+          },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 3000,
+      }),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
       return res.status(response.status).json({
-        error: data.error?.message || "Gemini API error",
+        error: data.error?.message || `Groq API error ${response.status}`,
         details: data,
       });
     }
 
-    // Extract text from Gemini response
-    const text = data.candidates?.[0]?.content?.parts
-      ?.map((p) => p.text)
-      .filter(Boolean)
-      .join("\n") || "";
+    const text = data.choices?.[0]?.message?.content || "";
 
-    // Extract grounding sources if available
-    const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
-    const sources = groundingMetadata?.groundingChunks?.map((c) => ({
-      title: c.web?.title || "",
-      url: c.web?.uri || "",
-    })) || [];
-
-    return res.status(200).json({ text, sources, raw: data });
+    return res.status(200).json({ text, sources: [], raw: data });
   } catch (err) {
     return res.status(500).json({ error: "Function error", details: String(err) });
   }

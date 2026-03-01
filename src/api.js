@@ -1,5 +1,5 @@
 // ============================================================
-// INTEL LIVE — API Layer & Agent System (Gemini Engine)
+// INTEL LIVE — API Layer & Agent System (Groq / Llama 3.3 70B)
 // ============================================================
 
 import { AGENTS, NEWS_SOURCES, ITEMS_PER_AGENT_QUERY } from "./config";
@@ -8,15 +8,15 @@ const API_PATH = "/api/claude";
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ── Core Gemini Call ──
-async function callGemini(apiKey, prompt, useGrounding = true) {
+// ── Core LLM Call (Groq) ──
+async function callLLM(apiKey, prompt) {
   const res = await fetch(API_PATH, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-api-key": apiKey,
     },
-    body: JSON.stringify({ prompt, useGrounding }),
+    body: JSON.stringify({ prompt }),
   });
 
   if (!res.ok) {
@@ -56,7 +56,7 @@ Return ONLY a valid JSON array of ${ITEMS_PER_AGENT_QUERY} most important recent
 Each item must be: {"headline":"<title>","summary":"<2-3 sentences>","source":"<outlet>","time":"<e.g. 2 hours ago>","severity":<1-5>,"verified":<boolean>,"location":"<place>"}
 Return ONLY the JSON array. No markdown, no explanation, no extra text.`;
 
-  const text = await callGemini(apiKey, prompt, true);
+  const text = await callLLM(apiKey, prompt);
   const items = parseJSON(text);
   if (!Array.isArray(items)) return [];
   return items.map((item) => ({
@@ -128,7 +128,7 @@ ${summaryParts}
 Return ONLY valid JSON (no markdown, no backticks, no explanation):
 {"threat_level":<1-10>,"threat_label":"<DEFCON label>","situation_summary":"<3 sentences in Romanian>","timeline_last_24h":["<4 events in Romanian>"],"next_hours_prediction":"<3 sentences Romanian>","next_days_prediction":"<3 sentences Romanian>","key_risks":["<5 risks Romanian>"],"escalation_probability":<0-100>,"nuclear_risk":<0-100>,"oil_impact":"<2 sentences Romanian>","proxy_status":"<2 sentences Romanian>","diplomatic_status":"<2 sentences Romanian>","civilian_impact":"<2 sentences Romanian>","breaking_alerts":["<3 breaking headlines Romanian>"],"recommendation":"<2 sentences Romanian>"}`;
 
-  const text = await callGemini(apiKey, prompt, false);
+  const text = await callLLM(apiKey, prompt);
   return parseJSON(text);
 }
 
@@ -136,7 +136,7 @@ Return ONLY valid JSON (no markdown, no backticks, no explanation):
 export async function verifyIntel(apiKey, item) {
   const prompt = `Verify this intelligence report: "${item.headline}" - ${item.summary} (Source: ${item.source})
 Search the web for corroboration. Return ONLY JSON: {"verified":<bool>,"confidence":<0-100>,"corroborating_sources":["<sources>"],"notes":"<note in Romanian>"}`;
-  const text = await callGemini(apiKey, prompt, true);
+  const text = await callLLM(apiKey, prompt);
   return parseJSON(text);
 }
 
@@ -145,7 +145,7 @@ export async function fetchBreakingNews(apiKey) {
   const prompt = `Search the web for absolute latest breaking news about Iran-Israel-US conflict right now.
 Check Reuters, AP, Al Jazeera, BBC, X/Twitter OSINT accounts.
 Return ONLY a JSON array (no markdown): [{"text":"<headline Romanian max 20 words>","severity":<1-5>,"time":"<when>"}] — exactly 6 items.`;
-  const text = await callGemini(apiKey, prompt, true);
+  const text = await callLLM(apiKey, prompt);
   const items = parseJSON(text);
   return Array.isArray(items) ? items : [];
 }
@@ -168,7 +168,7 @@ export class AgentManager {
 
   async runFullCycle() {
     this.cycleCount++;
-    this.log(`Ciclul #${this.cycleCount} — Lansare agenți (Gemini + Grounding)...`, "system");
+    this.log(`Ciclul #${this.cycleCount} — Lansare agenți (Groq Llama 3.3 70B)...`, "system");
 
     try {
       const results = await runAllAgents(this.apiKey, (progress) => {
@@ -215,7 +215,7 @@ export class AgentManager {
   start(intervalSec = 60) {
     if (this.running) return;
     this.running = true;
-    this.log("Sistem pornit — Engine: Gemini 2.0 Flash + Google Grounding", "system");
+    this.log("Sistem pornit — Engine: Groq Llama 3.3 70B (Free Tier)", "system");
     this.runFullCycle();
     const timer = setInterval(() => {
       if (this.running) this.runFullCycle();
