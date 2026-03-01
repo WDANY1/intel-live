@@ -473,16 +473,16 @@ export const WEBCAM_REGIONS = [
   { id: "levant", label: "LEVANT", color: "#e040fb", flag: "🗺️" },
 ];
 
-// ── AI Models — Top 5 Free Models on OpenRouter ──
+// ── AI Models — Top 5 Free Models on OpenRouter (March 2026) ──
 export const AI_MODELS = [
   {
-    id: "google/gemini-2.5-pro-exp-03-25:free",
-    name: "Gemini 2.5 Pro",
+    id: "google/gemma-3-27b-it:free",
+    name: "Gemma 3 27B",
     provider: "Google",
     color: "#4285f4",
     icon: "🔵",
-    strength: "Best reasoning & largest context (1M tokens)",
-    contextWindow: 1000000,
+    strength: "Reliable instruction-following & large context",
+    contextWindow: 131072,
   },
   {
     id: "deepseek/deepseek-chat-v3-0324:free",
@@ -494,22 +494,13 @@ export const AI_MODELS = [
     contextWindow: 131072,
   },
   {
-    id: "meta-llama/llama-4-scout:free",
-    name: "Llama 4 Scout",
-    provider: "Meta",
-    color: "#0668E1",
-    icon: "🔷",
-    strength: "Fast general-purpose intelligence",
-    contextWindow: 131072,
-  },
-  {
-    id: "qwen/qwen2.5-vl-72b-instruct:free",
-    name: "Qwen 2.5 72B",
+    id: "qwen/qwq-32b:free",
+    name: "QwQ 32B",
     provider: "Alibaba",
     color: "#ff6a00",
     icon: "🟠",
-    strength: "Excellent multilingual & multimodal analysis",
-    contextWindow: 32768,
+    strength: "Advanced reasoning & complex analysis",
+    contextWindow: 131072,
   },
   {
     id: "mistralai/mistral-small-3.1-24b-instruct:free",
@@ -520,24 +511,33 @@ export const AI_MODELS = [
     strength: "Fast structured output & JSON generation",
     contextWindow: 131072,
   },
+  {
+    id: "deepseek/deepseek-r1-0528:free",
+    name: "DeepSeek R1",
+    provider: "DeepSeek",
+    color: "#00b894",
+    icon: "🟩",
+    strength: "Top-tier reasoning & deep analysis",
+    contextWindow: 131072,
+  },
 ];
 
 // Map agents to primary models (round-robin + best fit)
 export const AGENT_MODEL_MAP = {
-  sigint: "google/gemini-2.5-pro-exp-03-25:free",      // Best reasoning for military intel
-  osint: "deepseek/deepseek-chat-v3-0324:free",         // Strong analysis
-  humint: "qwen/qwen2.5-vl-72b-instruct:free",          // Multilingual for ground reports
-  geoint: "meta-llama/llama-4-scout:free",               // Fast general purpose
-  econint: "mistralai/mistral-small-3.1-24b-instruct:free", // Good for structured data
-  proxy: "google/gemini-2.5-pro-exp-03-25:free",         // Best reasoning
-  diplo: "deepseek/deepseek-chat-v3-0324:free",          // Strong analysis
+  sigint: "google/gemma-3-27b-it:free",                    // Reliable for military intel
+  osint: "deepseek/deepseek-chat-v3-0324:free",            // Strong analysis
+  humint: "qwen/qwq-32b:free",                             // Advanced reasoning for ground reports
+  geoint: "mistralai/mistral-small-3.1-24b-instruct:free", // Fast structured data
+  econint: "deepseek/deepseek-r1-0528:free",               // Deep reasoning for economic analysis
+  proxy: "google/gemma-3-27b-it:free",                     // Reliable for proxy monitoring
+  diplo: "deepseek/deepseek-chat-v3-0324:free",            // Strong analysis for diplomacy
 };
 
 // Models used for cross-verification (query 3 different models)
 export const VERIFICATION_MODELS = [
-  "google/gemini-2.5-pro-exp-03-25:free",
+  "google/gemma-3-27b-it:free",
   "deepseek/deepseek-chat-v3-0324:free",
-  "qwen/qwen2.5-vl-72b-instruct:free",
+  "qwen/qwq-32b:free",
 ];
 
 // ── UI Constants ──
