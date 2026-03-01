@@ -1,7 +1,7 @@
-// Vercel Serverless Function — Proxy to Groq API (Free, no billing required)
+// Vercel Serverless Function — Proxy to OpenRouter API (Free Models)
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = "llama-3.3-70b-versatile";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const MODEL = "meta-llama/llama-4-maverick:free";
 
 export default async function handler(req, res) {
   try {
@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       return res.status(200).json({
         status: "ok",
-        hasApiKey: !!process.env.GROQ_API_KEY,
+        hasApiKey: !!process.env.OPENROUTER_API_KEY,
         runtime: process.version,
         engine: MODEL,
       });
@@ -23,21 +23,23 @@ export default async function handler(req, res) {
 
     if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-    const apiKey = process.env.GROQ_API_KEY || req.headers["x-api-key"];
+    const apiKey = process.env.OPENROUTER_API_KEY || req.headers["x-api-key"];
     if (!apiKey) {
       return res.status(401).json({
         error: "No API key",
-        hint: "Set GROQ_API_KEY in Vercel > Settings > Environment Variables",
+        hint: "Set OPENROUTER_API_KEY in Vercel > Settings > Environment Variables (get free key from openrouter.ai)",
       });
     }
 
     const { prompt } = req.body;
 
-    const response = await fetch(GROQ_URL, {
+    const response = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://intel-live.vercel.app",
+        "X-Title": "Intel Live Dashboard",
       },
       body: JSON.stringify({
         model: MODEL,
@@ -45,12 +47,12 @@ export default async function handler(req, res) {
           {
             role: "system",
             content:
-              "You are an elite military intelligence analyst specializing in Middle East geopolitics, specifically the Iran-Israel-US conflict. Provide detailed, structured intelligence reports. Always respond with valid JSON when asked for JSON. Use your knowledge up to your training cutoff to provide the most recent and relevant analysis.",
+              "You are an elite military intelligence analyst specializing in Middle East geopolitics (Iran-Israel-US conflict). Provide detailed, structured intelligence reports. Always respond with valid JSON when asked. Use the most recent knowledge available. Respond based on real events and verified information.",
           },
           { role: "user", content: prompt },
         ],
         temperature: 0.7,
-        max_tokens: 3000,
+        max_tokens: 4000,
       }),
     });
 
@@ -58,7 +60,7 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       return res.status(response.status).json({
-        error: data.error?.message || `Groq API error ${response.status}`,
+        error: data.error?.message || `OpenRouter API error ${response.status}`,
         details: data,
       });
     }

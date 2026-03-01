@@ -1,5 +1,5 @@
 // ============================================================
-// INTEL LIVE — API Layer & Agent System (Groq / Llama 3.3 70B)
+// INTEL LIVE — API Layer & Agent System (OpenRouter / Llama 4 Maverick)
 // ============================================================
 
 import { AGENTS, NEWS_SOURCES, ITEMS_PER_AGENT_QUERY } from "./config";
@@ -8,7 +8,7 @@ const API_PATH = "/api/claude";
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ── Core LLM Call (Groq) ──
+// ── Core LLM Call (OpenRouter) ──
 async function callLLM(apiKey, prompt) {
   const res = await fetch(API_PATH, {
     method: "POST",
@@ -46,15 +46,17 @@ function parseJSON(raw) {
 async function runAgentQuery(apiKey, agent) {
   const allQueries = agent.queries.join(" OR ");
   const sourceMentions = agent.sources.map((s) => `@${s}`).join(", ");
+  const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-  const prompt = `Search the web for the very latest breaking news about: "${allQueries}".
-Today is ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}.
-Focus on the most recent updates from the last few hours.
-Credible OSINT sources to check: ${sourceMentions}. Also check: ${NEWS_SOURCES.slice(0, 4).join(", ")}
+  const prompt = `You are an intelligence analyst. Report on the very latest developments about: "${allQueries}".
+Today is ${today}. Focus ONLY on the most recent events from the last 24-48 hours.
+Key OSINT accounts to reference: ${sourceMentions}
+Key news outlets to reference: ${NEWS_SOURCES.slice(0, 12).join(", ")}
 
-Return ONLY a valid JSON array of ${ITEMS_PER_AGENT_QUERY} most important recent updates.
-Each item must be: {"headline":"<title>","summary":"<2-3 sentences>","source":"<outlet>","time":"<e.g. 2 hours ago>","severity":<1-5>,"verified":<boolean>,"location":"<place>"}
-Return ONLY the JSON array. No markdown, no explanation, no extra text.`;
+Return ONLY a valid JSON array of exactly ${ITEMS_PER_AGENT_QUERY} intelligence items about real, verified events.
+Each item: {"headline":"<concise title>","summary":"<2-3 detailed sentences about what happened>","source":"<news outlet or OSINT account>","time":"<e.g. 3 hours ago>","severity":<1-5>,"verified":<true or false>,"location":"<city/country>"}
+Severity guide: 1=routine, 2=notable, 3=significant, 4=high-impact, 5=critical/emergency.
+Return ONLY the JSON array, no markdown, no backticks, no explanation.`;
 
   const text = await callLLM(apiKey, prompt);
   const items = parseJSON(text);
@@ -94,7 +96,7 @@ export async function runAllAgents(apiKey, onAgentProgress) {
       allResults[agent.id] = items;
     });
     await Promise.allSettled(promises);
-    if (i + batchSize < AGENTS.length) await delay(500);
+    if (i + batchSize < AGENTS.length) await delay(800);
   }
   return allResults;
 }
@@ -135,16 +137,17 @@ Return ONLY valid JSON (no markdown, no backticks, no explanation):
 // ── Verify item ──
 export async function verifyIntel(apiKey, item) {
   const prompt = `Verify this intelligence report: "${item.headline}" - ${item.summary} (Source: ${item.source})
-Search the web for corroboration. Return ONLY JSON: {"verified":<bool>,"confidence":<0-100>,"corroborating_sources":["<sources>"],"notes":"<note in Romanian>"}`;
+Search for corroboration from major news sources. Return ONLY JSON: {"verified":<bool>,"confidence":<0-100>,"corroborating_sources":["<sources>"],"notes":"<note in Romanian>"}`;
   const text = await callLLM(apiKey, prompt);
   return parseJSON(text);
 }
 
 // ── Breaking news for ticker ──
 export async function fetchBreakingNews(apiKey) {
-  const prompt = `Search the web for absolute latest breaking news about Iran-Israel-US conflict right now.
-Check Reuters, AP, Al Jazeera, BBC, X/Twitter OSINT accounts.
-Return ONLY a JSON array (no markdown): [{"text":"<headline Romanian max 20 words>","severity":<1-5>,"time":"<when>"}] — exactly 6 items.`;
+  const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const prompt = `Today is ${today}. Report the absolute latest breaking news about the Iran-Israel-US conflict.
+Check Reuters, AP, Al Jazeera, BBC, CNN, Times of Israel, Iran International.
+Return ONLY a JSON array (no markdown, no backticks): [{"text":"<headline in Romanian max 20 words>","severity":<1-5>,"time":"<when>"}] — exactly 6 items.`;
   const text = await callLLM(apiKey, prompt);
   const items = parseJSON(text);
   return Array.isArray(items) ? items : [];
@@ -168,7 +171,7 @@ export class AgentManager {
 
   async runFullCycle() {
     this.cycleCount++;
-    this.log(`Ciclul #${this.cycleCount} — Lansare agenți (Groq Llama 3.3 70B)...`, "system");
+    this.log(`Ciclul #${this.cycleCount} — Lansare agenți (OpenRouter Llama 4 Maverick)...`, "system");
 
     try {
       const results = await runAllAgents(this.apiKey, (progress) => {
@@ -195,7 +198,7 @@ export class AgentManager {
         if (analysisResult) this.log("Analiză completă", "success");
         else if (analysis.status === "rejected") this.log(`Analiză eșuată: ${analysis.reason?.message?.slice(0, 80)}`, "error");
       } else {
-        this.log("Niciun raport colectat — verifică API key și creditul", "error");
+        this.log("Niciun raport colectat — verifică API key", "error");
       }
 
       this.onUpdate?.({
@@ -212,10 +215,10 @@ export class AgentManager {
     }
   }
 
-  start(intervalSec = 60) {
+  start(intervalSec = 300) {
     if (this.running) return;
     this.running = true;
-    this.log("Sistem pornit — Engine: Groq Llama 3.3 70B (Free Tier)", "system");
+    this.log("Sistem pornit — Engine: OpenRouter / Llama 4 Maverick (Free)", "system");
     this.runFullCycle();
     const timer = setInterval(() => {
       if (this.running) this.runFullCycle();

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { AGENTS, OSINT_SOURCES, REFRESH_INTERVAL, MAX_LOG_ENTRIES, SEVERITY } from "./config";
+import { AGENTS, OSINT_SOURCES, NEWS_CHANNELS, LIVE_WEBCAMS, WEBCAM_REGIONS, REFRESH_INTERVAL, MAX_LOG_ENTRIES, SEVERITY } from "./config";
 import { AgentManager, verifyIntel } from "./api";
 
 // ════════════════════════════════════════════════════════════
@@ -58,7 +58,7 @@ function ApiKeyModal({ onSubmit }) {
         return;
       }
 
-      // 2. Test actual Groq API call
+      // 2. Test actual OpenRouter API call
       const apiRes = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": key.trim() || "test" },
@@ -67,7 +67,7 @@ function ApiKeyModal({ onSubmit }) {
       const apiData = await apiRes.json();
 
       if (apiRes.ok && apiData.text) {
-        setTestStatus({ ok: true, message: `Conexiune OK! Groq activ. (${health.hasApiKey ? "ENV var setat" : "key din browser"})` });
+        setTestStatus({ ok: true, message: `Conexiune OK! OpenRouter activ. (${health.hasApiKey ? "ENV var setat" : "key din browser"})` });
       } else {
         setTestStatus({ ok: false, message: `API error ${apiRes.status}: ${apiData.error || JSON.stringify(apiData).slice(0, 200)}` });
       }
@@ -101,14 +101,14 @@ function ApiKeyModal({ onSubmit }) {
         </p>
 
         <label style={{ display: "block", fontFamily: "var(--mono)", fontSize: "0.65rem", letterSpacing: 2, color: "var(--text-muted)", marginBottom: 8 }}>
-          GROQ API KEY
+          OPENROUTER API KEY
         </label>
         <input
           type="password"
           value={key}
           onChange={(e) => setKey(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && key.trim() && onSubmit(key.trim())}
-          placeholder="gsk_..."
+          placeholder="sk-or-..."
           style={{
             width: "100%", padding: "12px 16px", borderRadius: 8,
             background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
@@ -503,7 +503,204 @@ function InfoBox({ icon, label, color, text }) {
   );
 }
 
-// ── Sources Panel ──
+// ── Webcams Panel ──
+function WebcamsPanel() {
+  const [regionFilter, setRegionFilter] = useState("all");
+
+  const filtered = regionFilter === "all"
+    ? LIVE_WEBCAMS
+    : LIVE_WEBCAMS.filter((w) => w.region === regionFilter);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Region Filter */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", letterSpacing: 2, color: "var(--text-muted)", marginRight: 8 }}>
+          REGIUNE:
+        </span>
+        {WEBCAM_REGIONS.map((r) => (
+          <button
+            key={r.id}
+            onClick={() => setRegionFilter(r.id)}
+            style={{
+              padding: "5px 14px", borderRadius: 16,
+              fontFamily: "var(--mono)", fontSize: "0.6rem",
+              background: regionFilter === r.id ? `${r.color}18` : "rgba(255,255,255,0.03)",
+              border: `1px solid ${regionFilter === r.id ? `${r.color}44` : "var(--border)"}`,
+              color: regionFilter === r.id ? r.color : "var(--text-muted)",
+              cursor: "pointer", transition: "all 0.2s",
+            }}
+          >
+            {r.flag || ""} {r.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Stats bar */}
+      <div style={{
+        display: "flex", gap: 20, padding: "10px 16px",
+        background: "rgba(255,59,59,0.05)", border: "1px solid rgba(255,59,59,0.15)",
+        borderRadius: "var(--radius)", alignItems: "center",
+      }}>
+        <PulsingDot color="#ff3b3b" size={8} />
+        <span style={{ fontFamily: "var(--mono)", fontSize: "0.65rem", color: "#ff3b3b", fontWeight: 700, letterSpacing: 1 }}>
+          LIVE CAMERAS
+        </span>
+        <span style={{ fontFamily: "var(--mono)", fontSize: "0.6rem", color: "var(--text-muted)" }}>
+          {LIVE_WEBCAMS.length} locații • {LIVE_WEBCAMS.reduce((a, c) => a + c.cameras.length, 0)} camere
+        </span>
+      </div>
+
+      {/* Camera Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 12 }}>
+        {filtered.map((location) => (
+          <div key={`${location.city}-${location.country}`} style={{
+            background: "var(--bg-card)", border: "1px solid var(--border)",
+            borderRadius: "var(--radius)", overflow: "hidden",
+          }}>
+            {/* Location Header */}
+            <div style={{
+              padding: "14px 16px", borderBottom: "1px solid var(--border)",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: "1.3rem" }}>{location.flag}</span>
+                <div>
+                  <div style={{ fontFamily: "var(--mono)", fontSize: "0.85rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                    {location.city}
+                  </div>
+                  <div style={{ fontFamily: "var(--mono)", fontSize: "0.6rem", color: "var(--text-muted)" }}>
+                    {location.country}
+                  </div>
+                </div>
+              </div>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 5,
+                padding: "3px 10px", borderRadius: 12,
+                background: "rgba(255,59,59,0.12)", border: "1px solid rgba(255,59,59,0.25)",
+              }}>
+                <PulsingDot color="#ff3b3b" size={6} />
+                <span style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: "#ff3b3b", fontWeight: 700, letterSpacing: 1 }}>
+                  LIVE
+                </span>
+              </div>
+            </div>
+
+            {/* Camera List */}
+            <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+              {location.cameras.map((cam, ci) => (
+                <a
+                  key={ci}
+                  href={cam.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "8px 12px", borderRadius: "var(--radius-sm)",
+                    background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)",
+                    textDecoration: "none", cursor: "pointer",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(79,195,247,0.08)";
+                    e.currentTarget.style.borderColor = "rgba(79,195,247,0.2)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(255,255,255,0.02)";
+                    e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)";
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: "0.7rem" }}>📹</span>
+                    <div>
+                      <div style={{ fontFamily: "var(--mono)", fontSize: "0.7rem", color: "#4fc3f7", fontWeight: 600 }}>
+                        {cam.name}
+                      </div>
+                      <div style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: "var(--text-dim)" }}>
+                        {cam.source}
+                      </div>
+                    </div>
+                  </div>
+                  <span style={{ fontFamily: "var(--mono)", fontSize: "0.6rem", color: "var(--text-muted)" }}>
+                    ↗
+                  </span>
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── News Sources Panel ──
+function NewsSourcesPanel() {
+  const typeColors = { wire: "#ff9100", tv: "#4fc3f7", news: "#69f0ae", defense: "#ff3b3b" };
+  const typeLabels = { wire: "AGENȚIE", tv: "TV", news: "PRESĂ", defense: "APĂRARE" };
+  const groups = [
+    { label: "Agenții de presă & Wire Services", items: NEWS_CHANNELS.filter((s) => s.type === "wire") },
+    { label: "Canale TV internaționale", items: NEWS_CHANNELS.filter((s) => s.type === "tv") },
+    { label: "Presă & Ziare", items: NEWS_CHANNELS.filter((s) => s.type === "news") },
+    { label: "Apărare & Military", items: NEWS_CHANNELS.filter((s) => s.type === "defense") },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{
+        display: "flex", gap: 16, padding: "12px 16px",
+        background: "rgba(79,195,247,0.05)", border: "1px solid rgba(79,195,247,0.15)",
+        borderRadius: "var(--radius)", flexWrap: "wrap",
+      }}>
+        <span style={{ fontFamily: "var(--mono)", fontSize: "0.65rem", color: "#4fc3f7", fontWeight: 700, letterSpacing: 1 }}>
+          {NEWS_CHANNELS.length} CANALE DE ȘTIRI
+        </span>
+        {Object.entries(typeLabels).map(([type, label]) => (
+          <span key={type} style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: typeColors[type] }}>
+            {label}: {NEWS_CHANNELS.filter((s) => s.type === type).length}
+          </span>
+        ))}
+      </div>
+
+      {groups.map((group) => (
+        <div key={group.label}>
+          <h3 style={{ fontFamily: "var(--mono)", fontSize: "0.6rem", letterSpacing: 2, color: "var(--text-muted)", marginBottom: 10 }}>
+            {group.label.toUpperCase()} ({group.items.length})
+          </h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 8 }}>
+            {group.items.map((src) => (
+              <div key={src.name} style={{
+                background: "var(--bg-card)", border: "1px solid var(--border)",
+                borderRadius: "var(--radius-sm)", padding: "10px 14px",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+              }}>
+                <div>
+                  <div style={{ fontFamily: "var(--mono)", fontSize: "0.73rem", fontWeight: 600, color: typeColors[src.type] }}>
+                    {src.name}
+                  </div>
+                  <div style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: "var(--text-dim)" }}>
+                    {src.region.toUpperCase()} • {src.url}
+                  </div>
+                </div>
+                <span style={{
+                  fontFamily: "var(--mono)", fontSize: "0.45rem", letterSpacing: 1,
+                  padding: "2px 6px", borderRadius: 3,
+                  background: `${typeColors[src.type]}15`,
+                  color: typeColors[src.type],
+                  border: `1px solid ${typeColors[src.type]}33`,
+                }}>
+                  {typeLabels[src.type]}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Sources Panel (OSINT X/Twitter) ──
 function SourcesPanel() {
   const tiers = [
     { label: "TIER 1 — Surse Primare", sources: OSINT_SOURCES.filter((s) => s.tier === 1) },
@@ -717,7 +914,8 @@ export default function LiveIntelDashboard() {
       if (e.key === "1") setActiveTab("overview");
       if (e.key === "2") setActiveTab("feed");
       if (e.key === "3") setActiveTab("analysis");
-      if (e.key === "4") setActiveTab("sources");
+      if (e.key === "4") setActiveTab("webcams");
+      if (e.key === "5") setActiveTab("sources");
       if (e.key === "s" || e.key === "S") setSoundEnabled((p) => !p);
       if (e.key === "Escape") { setSearchQuery(""); setActiveFilter("ALL"); }
     };
@@ -734,6 +932,7 @@ export default function LiveIntelDashboard() {
     { id: "overview", label: "SITUAȚIE", icon: "📋" },
     { id: "feed", label: "FLUX LIVE", icon: "📡" },
     { id: "analysis", label: "ANALIZĂ", icon: "🧠" },
+    { id: "webcams", label: "CAMERE LIVE", icon: "📹" },
     { id: "sources", label: "SURSE", icon: "🔗" },
   ];
 
@@ -862,7 +1061,7 @@ export default function LiveIntelDashboard() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ fontFamily: "var(--mono)", fontSize: "0.6rem", color: "var(--text-muted)" }}>Surse</span>
-                <span style={{ fontFamily: "var(--mono)", fontSize: "0.7rem", fontWeight: 700, color: "#ffd740" }}>{OSINT_SOURCES.length}</span>
+                <span style={{ fontFamily: "var(--mono)", fontSize: "0.7rem", fontWeight: 700, color: "#ffd740" }}>{OSINT_SOURCES.length + NEWS_CHANNELS.length}</span>
               </div>
             </div>
           </div>
@@ -871,7 +1070,7 @@ export default function LiveIntelDashboard() {
           <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
             <div style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: "var(--text-dim)", lineHeight: 1.8 }}>
               <span style={{ color: "var(--text-muted)" }}>R</span> Refresh<br />
-              <span style={{ color: "var(--text-muted)" }}>1-4</span> Tabs<br />
+              <span style={{ color: "var(--text-muted)" }}>1-5</span> Tabs<br />
               <span style={{ color: "var(--text-muted)" }}>S</span> Sunet<br />
               <span style={{ color: "var(--text-muted)" }}>Esc</span> Reset
             </div>
@@ -1031,10 +1230,23 @@ export default function LiveIntelDashboard() {
             </div>
           )}
 
+          {/* ── TAB: Webcams ── */}
+          {activeTab === "webcams" && (
+            <div style={{ animation: "fadeIn 0.3s ease" }}>
+              <WebcamsPanel />
+            </div>
+          )}
+
           {/* ── TAB: Sources ── */}
           {activeTab === "sources" && (
-            <div style={{ animation: "fadeIn 0.3s ease" }}>
-              <SourcesPanel />
+            <div style={{ display: "flex", flexDirection: "column", gap: 24, animation: "fadeIn 0.3s ease" }}>
+              <NewsSourcesPanel />
+              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 20 }}>
+                <h2 style={{ fontFamily: "var(--mono)", fontSize: "0.7rem", letterSpacing: 2, color: "#4fc3f7", marginBottom: 16 }}>
+                  CONTURI OSINT X/TWITTER ({OSINT_SOURCES.length})
+                </h2>
+                <SourcesPanel />
+              </div>
             </div>
           )}
 
@@ -1050,7 +1262,7 @@ export default function LiveIntelDashboard() {
         background: "rgba(0,0,0,0.3)",
       }}>
         <span style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "var(--text-dim)", letterSpacing: 1 }}>
-          INTEL LIVE • GROQ LLAMA 3.3 70B • 7 AGENȚI • 70+ SURSE OSINT • AUTO-REFRESH {REFRESH_INTERVAL}s
+          INTEL LIVE • OPENROUTER LLAMA 4 MAVERICK • 7 AGENȚI • {OSINT_SOURCES.length} OSINT + {NEWS_CHANNELS.length} CANALE ȘTIRI • {LIVE_WEBCAMS.length} WEBCAMS • REFRESH {Math.floor(REFRESH_INTERVAL/60)}min
         </span>
         <span style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "var(--text-dim)", letterSpacing: 1 }}>
           DOAR PENTRU INFORMARE • NU CONSTITUIE CONSILIERE MILITARĂ
