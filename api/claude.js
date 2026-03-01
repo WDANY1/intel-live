@@ -4,7 +4,7 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 // Aici am pus cel mai bun model Gemini. 
 // Dacă vrei varianta 100% gratuită de pe OpenRouter, modifică în: "google/gemini-2.5-flash:free"
-const MODEL = "google/gemini-2.5-pro";
+const MODEL = "google/gemini-3-flash:free";
 
 export default async function handler(req, res) {
   try {
