@@ -1,7 +1,7 @@
 // Vercel Serverless Function — Proxy to OpenRouter API (Free Models)
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = "meta-llama/llama-3.3-70b-instruct:free";
+const MODEL = "google/gemma-3-27b-it:free";
 
 export default async function handler(req, res) {
   try {
