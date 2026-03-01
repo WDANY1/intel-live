@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { AGENTS, OSINT_SOURCES, NEWS_CHANNELS, LIVE_WEBCAMS, WEBCAM_REGIONS, REFRESH_INTERVAL, MAX_LOG_ENTRIES, SEVERITY } from "./config";
+import { AGENTS, OSINT_SOURCES, NEWS_CHANNELS, LIVE_WEBCAMS, WEBCAM_REGIONS, REFRESH_INTERVAL, MAX_LOG_ENTRIES, SEVERITY, AI_MODELS, AGENT_MODEL_MAP } from "./config";
 import { AgentManager, verifyIntel } from "./api";
 
 // ════════════════════════════════════════════════════════════
@@ -97,9 +97,20 @@ function ApiKeyModal({ onSubmit }) {
         <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginBottom: 6 }}>
           Monitor de informații în timp real — Conflict Iran-Israel-SUA
         </p>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginBottom: 28, lineHeight: 1.6 }}>
-          7 agenți AI rulează în paralel, scanând 70+ surse OSINT, conturi X/Twitter și agenții de știri pentru actualizări la minut.
+        <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginBottom: 12, lineHeight: 1.6 }}>
+          7 agenți AI rulează în paralel pe {AI_MODELS.length} modele AI, scanând 70+ surse OSINT, conturi X/Twitter și agenții de știri. Verificare încrucișată din multiple surse AI.
         </p>
+        {/* AI Models display */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 20, padding: "10px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)" }}>
+          <span style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", letterSpacing: 2, color: "var(--text-muted)", marginBottom: 4 }}>MODELE AI ACTIVE</span>
+          {AI_MODELS.map((m) => (
+            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: "0.7rem" }}>{m.icon}</span>
+              <span style={{ fontFamily: "var(--mono)", fontSize: "0.65rem", color: m.color, fontWeight: 600 }}>{m.name}</span>
+              <span style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "var(--text-dim)" }}>— {m.provider} — {m.strength}</span>
+            </div>
+          ))}
+        </div>
 
         <label style={{ display: "block", fontFamily: "var(--mono)", fontSize: "0.65rem", letterSpacing: 2, color: "var(--text-muted)", marginBottom: 8 }}>
           OPENROUTER API KEY
@@ -121,7 +132,7 @@ function ApiKeyModal({ onSubmit }) {
           autoFocus
         />
         <p style={{ color: "var(--text-dim)", fontSize: "0.65rem", marginTop: 8, fontFamily: "var(--mono)" }}>
-          Ia cheia de pe openrouter.ai/settings/keys — gratuit, model Llama 4 Maverick.
+          Ia cheia de pe openrouter.ai/settings/keys — gratuit, {AI_MODELS.length} modele AI incluse.
         </p>
 
         {/* Test connection button */}
@@ -330,6 +341,9 @@ function IntelCard({ item, agentDef, onVerify, isNew }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <span style={{ fontFamily: "var(--mono)", fontSize: "0.6rem", color: "var(--text-muted)" }}>{item.source}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {item.aiModelName && (
+            <span style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: "var(--text-dim)", padding: "1px 5px", borderRadius: 3, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>{item.aiModelName}</span>
+          )}
           {item.location && (
             <span style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "var(--text-dim)" }}>📍 {item.location}</span>
           )}
@@ -357,6 +371,20 @@ function IntelCard({ item, agentDef, onVerify, isNew }) {
               <span style={{ color: verification.verified ? "#69f0ae" : "#ff9100", fontFamily: "var(--mono)", fontWeight: 600 }}>
                 {verification.verified ? "✓ CONFIRMAT" : "⚠ NECONFIRMAT"} — Încredere: {verification.confidence}%
               </span>
+              {/* Cross-verification results */}
+              {verification.crossVerification && (
+                <div style={{ marginTop: 6, padding: "6px 10px", background: "rgba(79,195,247,0.05)", borderRadius: 4, border: "1px solid rgba(79,195,247,0.1)" }}>
+                  <div style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", letterSpacing: 1, color: "#4fc3f7", marginBottom: 4 }}>
+                    VERIFICARE ÎNCRUCIȘATĂ — {verification.crossVerification.consensus}
+                  </div>
+                  <div style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "var(--text-muted)" }}>
+                    {verification.crossVerification.modelsConfirmed}/{verification.crossVerification.modelsResponded} modele AI confirmă
+                    {verification.crossVerification.modelNames?.length > 0 && (
+                      <span style={{ color: "var(--text-dim)" }}> ({verification.crossVerification.modelNames.join(", ")})</span>
+                    )}
+                  </div>
+                </div>
+              )}
               {verification.notes && <p style={{ margin: "4px 0 0", color: "var(--text-secondary)", fontSize: "0.65rem" }}>{verification.notes}</p>}
               {verification.corroborating_sources?.length > 0 && (
                 <p style={{ margin: "4px 0 0", color: "var(--text-muted)", fontSize: "0.6rem", fontFamily: "var(--mono)" }}>
@@ -1038,6 +1066,11 @@ export default function LiveIntelDashboard() {
                 <div style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: "var(--text-dim)" }}>
                   {status.status === "running" ? "Scanare..." : status.count ? `${status.count} rapoarte` : "Așteptare..."}
                 </div>
+                {(() => { const m = AI_MODELS.find((ai) => ai.id === AGENT_MODEL_MAP[agent.id]); return m ? (
+                  <div style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", color: m.color, marginTop: 2, opacity: 0.7 }}>
+                    {m.icon} {m.name}
+                  </div>
+                ) : null; })()}
               </div>
             );
           })}
@@ -1064,6 +1097,21 @@ export default function LiveIntelDashboard() {
                 <span style={{ fontFamily: "var(--mono)", fontSize: "0.6rem", color: "var(--text-muted)" }}>Surse</span>
                 <span style={{ fontFamily: "var(--mono)", fontSize: "0.7rem", fontWeight: 700, color: "#ffd740" }}>{OSINT_SOURCES.length + NEWS_CHANNELS.length}</span>
               </div>
+            </div>
+          </div>
+
+          {/* AI Models Status */}
+          <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+            <div style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", letterSpacing: 2, color: "var(--text-muted)", marginBottom: 6 }}>
+              MODELE AI ({AI_MODELS.length})
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              {AI_MODELS.map((m) => (
+                <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: m.color, flexShrink: 0 }} />
+                  <span style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: m.color }}>{m.name}</span>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1263,7 +1311,7 @@ export default function LiveIntelDashboard() {
         background: "rgba(0,0,0,0.3)",
       }}>
         <span style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "var(--text-dim)", letterSpacing: 1 }}>
-          INTEL LIVE • OPENROUTER LLAMA 4 MAVERICK • 7 AGENȚI • {OSINT_SOURCES.length} OSINT + {NEWS_CHANNELS.length} CANALE ȘTIRI • {LIVE_WEBCAMS.length} WEBCAMS • REFRESH {Math.floor(REFRESH_INTERVAL/60)}min
+          INTEL LIVE • {AI_MODELS.length} MODELE AI • 7 AGENȚI • {OSINT_SOURCES.length} OSINT + {NEWS_CHANNELS.length} CANALE ȘTIRI • {LIVE_WEBCAMS.length} WEBCAMS • REFRESH {Math.floor(REFRESH_INTERVAL/60)}min
         </span>
         <span style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "var(--text-dim)", letterSpacing: 1 }}>
           DOAR PENTRU INFORMARE • NU CONSTITUIE CONSILIERE MILITARĂ

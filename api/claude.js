@@ -1,7 +1,15 @@
-// Vercel Serverless Function — Proxy to OpenRouter API (Free Models)
+// Vercel Serverless Function — Multi-Model Proxy to OpenRouter API (Free Models)
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = "meta-llama/llama-4-maverick:free";
+const DEFAULT_MODEL = "google/gemini-2.5-pro-exp-03-25:free";
+
+const ALLOWED_MODELS = [
+  "google/gemini-2.5-pro-exp-03-25:free",
+  "deepseek/deepseek-chat-v3-0324:free",
+  "meta-llama/llama-4-scout:free",
+  "qwen/qwen2.5-vl-72b-instruct:free",
+  "mistralai/mistral-small-3.1-24b-instruct:free",
+];
 
 export default async function handler(req, res) {
   try {
@@ -17,7 +25,8 @@ export default async function handler(req, res) {
         status: "ok",
         hasApiKey: !!process.env.OPENROUTER_API_KEY,
         runtime: process.version,
-        engine: MODEL,
+        engine: "Multi-Model (5 AI)",
+        models: ALLOWED_MODELS,
       });
     }
 
@@ -31,7 +40,10 @@ export default async function handler(req, res) {
       });
     }
 
-    const { prompt } = req.body;
+    const { prompt, model: requestedModel } = req.body;
+
+    // Validate model — only allow whitelisted free models
+    const model = ALLOWED_MODELS.includes(requestedModel) ? requestedModel : DEFAULT_MODEL;
 
     const response = await fetch(OPENROUTER_URL, {
       method: "POST",
@@ -42,7 +54,7 @@ export default async function handler(req, res) {
         "X-Title": "Intel Live Dashboard",
       },
       body: JSON.stringify({
-        model: MODEL,
+        model,
         messages: [
           {
             role: "system",
@@ -61,13 +73,14 @@ export default async function handler(req, res) {
     if (!response.ok) {
       return res.status(response.status).json({
         error: data.error?.message || `OpenRouter API error ${response.status}`,
+        model,
         details: data,
       });
     }
 
     const text = data.choices?.[0]?.message?.content || "";
 
-    return res.status(200).json({ text, sources: [], raw: data });
+    return res.status(200).json({ text, model, sources: [], raw: data });
   } catch (err) {
     return res.status(500).json({ error: "Function error", details: String(err) });
   }

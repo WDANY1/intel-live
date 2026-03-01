@@ -473,6 +473,73 @@ export const WEBCAM_REGIONS = [
   { id: "levant", label: "LEVANT", color: "#e040fb", flag: "🗺️" },
 ];
 
+// ── AI Models — Top 5 Free Models on OpenRouter ──
+export const AI_MODELS = [
+  {
+    id: "google/gemini-2.5-pro-exp-03-25:free",
+    name: "Gemini 2.5 Pro",
+    provider: "Google",
+    color: "#4285f4",
+    icon: "🔵",
+    strength: "Best reasoning & largest context (1M tokens)",
+    contextWindow: 1000000,
+  },
+  {
+    id: "deepseek/deepseek-chat-v3-0324:free",
+    name: "DeepSeek V3",
+    provider: "DeepSeek",
+    color: "#00d4aa",
+    icon: "🟢",
+    strength: "Strong analysis & multilingual reasoning",
+    contextWindow: 131072,
+  },
+  {
+    id: "meta-llama/llama-4-scout:free",
+    name: "Llama 4 Scout",
+    provider: "Meta",
+    color: "#0668E1",
+    icon: "🔷",
+    strength: "Fast general-purpose intelligence",
+    contextWindow: 131072,
+  },
+  {
+    id: "qwen/qwen2.5-vl-72b-instruct:free",
+    name: "Qwen 2.5 72B",
+    provider: "Alibaba",
+    color: "#ff6a00",
+    icon: "🟠",
+    strength: "Excellent multilingual & multimodal analysis",
+    contextWindow: 32768,
+  },
+  {
+    id: "mistralai/mistral-small-3.1-24b-instruct:free",
+    name: "Mistral Small 3.1",
+    provider: "Mistral",
+    color: "#ff4500",
+    icon: "🔴",
+    strength: "Fast structured output & JSON generation",
+    contextWindow: 131072,
+  },
+];
+
+// Map agents to primary models (round-robin + best fit)
+export const AGENT_MODEL_MAP = {
+  sigint: "google/gemini-2.5-pro-exp-03-25:free",      // Best reasoning for military intel
+  osint: "deepseek/deepseek-chat-v3-0324:free",         // Strong analysis
+  humint: "qwen/qwen2.5-vl-72b-instruct:free",          // Multilingual for ground reports
+  geoint: "meta-llama/llama-4-scout:free",               // Fast general purpose
+  econint: "mistralai/mistral-small-3.1-24b-instruct:free", // Good for structured data
+  proxy: "google/gemini-2.5-pro-exp-03-25:free",         // Best reasoning
+  diplo: "deepseek/deepseek-chat-v3-0324:free",          // Strong analysis
+};
+
+// Models used for cross-verification (query 3 different models)
+export const VERIFICATION_MODELS = [
+  "google/gemini-2.5-pro-exp-03-25:free",
+  "deepseek/deepseek-chat-v3-0324:free",
+  "qwen/qwen2.5-vl-72b-instruct:free",
+];
+
 // ── UI Constants ──
 export const REFRESH_INTERVAL = 300; // 5 min — OpenRouter free tier: 200 req/day
 export const MAX_LOG_ENTRIES = 50;
