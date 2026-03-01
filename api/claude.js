@@ -1,7 +1,10 @@
-// Vercel Serverless Function — Proxy to Groq API (Free, no billing required)
+// Vercel Serverless Function — Proxy to OpenRouter API (Gemini)
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = "llama-3.3-70b-versatile";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+// Aici am pus cel mai bun model Gemini. 
+// Dacă vrei varianta 100% gratuită de pe OpenRouter, modifică în: "google/gemini-2.5-flash:free"
+const MODEL = "google/gemini-2.5-pro";
 
 export default async function handler(req, res) {
   try {
@@ -15,7 +18,7 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       return res.status(200).json({
         status: "ok",
-        hasApiKey: !!process.env.GROQ_API_KEY,
+        hasApiKey: !!process.env.OPENROUTER_API_KEY,
         runtime: process.version,
         engine: MODEL,
       });
@@ -23,21 +26,24 @@ export default async function handler(req, res) {
 
     if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-    const apiKey = process.env.GROQ_API_KEY || req.headers["x-api-key"];
+    // Căutăm noua cheie de OpenRouter
+    const apiKey = process.env.OPENROUTER_API_KEY || req.headers["x-api-key"];
     if (!apiKey) {
       return res.status(401).json({
         error: "No API key",
-        hint: "Set GROQ_API_KEY in Vercel > Settings > Environment Variables",
+        hint: "Set OPENROUTER_API_KEY in Vercel > Settings > Environment Variables",
       });
     }
 
     const { prompt } = req.body;
 
-    const response = await fetch(GROQ_URL, {
+    const response = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        "Authorization": `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://intel-live.vercel.app", // Ajută OpenRouter să știe de unde vine cererea
+        "X-Title": "Intel Live" // Numele site-ului tău
       },
       body: JSON.stringify({
         model: MODEL,
@@ -58,7 +64,7 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       return res.status(response.status).json({
-        error: data.error?.message || `Groq API error ${response.status}`,
+        error: data.error?.message || `OpenRouter API error ${response.status}`,
         details: data,
       });
     }
