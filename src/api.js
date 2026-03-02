@@ -1,7 +1,7 @@
 // ============================================================
 // INTEL LIVE — Multi-Model API Layer & Agent System
-// 5 AI Models: Gemini 2.5 Pro, DeepSeek V3, Llama 4 Scout,
-//              Qwen 2.5 72B, Mistral Small 3.1
+// 5 AI Models: Gemma 3 27B, DeepSeek V3, QwQ 32B,
+//              Mistral Small 3.1, DeepSeek R1 Zero
 // Cross-verification across multiple models
 // ============================================================
 
@@ -144,9 +144,9 @@ export async function runAllAgents(apiKey, onAgentProgress) {
   return allResults;
 }
 
-// ── Deep Analysis (uses best model: Gemini 2.5 Pro) ──
+// ── Deep Analysis (uses best available model) ──
 export async function runAnalysis(apiKey, allIntel) {
-  const analysisModel = AI_MODELS[0].id; // Gemini 2.5 Pro — best reasoning
+  const analysisModel = AI_MODELS[0].id; // Gemma 3 27B — reliable analysis
 
   const summaryParts = Object.entries(allIntel)
     .filter(([, items]) => items.length > 0)

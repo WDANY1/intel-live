@@ -5,12 +5,5 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: {
-      '/api/claude': {
-        target: 'https://api.anthropic.com',
-        changeOrigin: true,
-        rewrite: () => '/v1/messages',
-      },
-    },
   },
 })

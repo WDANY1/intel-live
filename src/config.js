@@ -541,7 +541,7 @@ export const VERIFICATION_MODELS = [
 ];
 
 // ── UI Constants ──
-export const REFRESH_INTERVAL = 300; // 5 min — OpenRouter free tier: 200 req/day
+export const REFRESH_INTERVAL = 300; // 5 min — OpenRouter free tier: 50 req/day (1000 with $10 credits)
 export const MAX_LOG_ENTRIES = 50;
 export const MAX_TICKER_ITEMS = 30;
 export const ITEMS_PER_AGENT_QUERY = 5;

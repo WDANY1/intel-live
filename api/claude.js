@@ -10,8 +10,12 @@ const ALLOWED_MODELS = [
   "qwen/qwq-32b:free",
   "deepseek/deepseek-r1-zero:free",
   "meta-llama/llama-4-scout:free",
-  "openrouter/free",  // Magic router — auto-selects any working free model
+  "openrouter/free", // Magic router — auto-selects any working free model
 ];
+
+const RETRY_CODES = [404, 429, 503, 502];
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default async function handler(req, res) {
   try {
@@ -32,7 +36,8 @@ export default async function handler(req, res) {
       });
     }
 
-    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+    if (req.method !== "POST")
+      return res.status(405).json({ error: "Method not allowed" });
 
     const apiKey = process.env.OPENROUTER_API_KEY || req.headers["x-api-key"];
     if (!apiKey) {
@@ -45,7 +50,9 @@ export default async function handler(req, res) {
     const { prompt, model: requestedModel } = req.body;
 
     // Validate model — only allow whitelisted free models
-    const model = ALLOWED_MODELS.includes(requestedModel) ? requestedModel : DEFAULT_MODEL;
+    const model = ALLOWED_MODELS.includes(requestedModel)
+      ? requestedModel
+      : DEFAULT_MODEL;
 
     const messages = [
       {
@@ -57,47 +64,82 @@ export default async function handler(req, res) {
     ];
 
     const makeRequest = async (useModel) => {
-      return fetch(OPENROUTER_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://intel-live.vercel.app",
-          "X-Title": "Intel Live Dashboard",
-        },
-        body: JSON.stringify({
-          model: useModel,
-          messages,
-          temperature: 0.7,
-          max_tokens: 4000,
-        }),
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      try {
+        return await fetch(OPENROUTER_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+            "HTTP-Referer": "https://intel-live.vercel.app",
+            "X-Title": "Intel Live Dashboard",
+          },
+          body: JSON.stringify({
+            model: useModel,
+            messages,
+            temperature: 0.7,
+            max_tokens: 4000,
+          }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
     };
 
-    // Try requested model, then fallback through other models on 404/429/503
-    const RETRY_CODES = [404, 429, 503];
+    // Build fallback order: requested model first, then others, openrouter/free last
     const tryOrder = [model, ...ALLOWED_MODELS.filter((m) => m !== model)];
-    let response, data, usedModel;
+    let response, data, usedModel, lastError;
 
-    for (const tryModel of tryOrder) {
-      response = await makeRequest(tryModel);
-      data = await response.json();
-      usedModel = tryModel;
-      if (response.ok || !RETRY_CODES.includes(response.status)) break;
+    for (let i = 0; i < tryOrder.length; i++) {
+      const tryModel = tryOrder[i];
+      try {
+        response = await makeRequest(tryModel);
+        data = await response.json();
+        usedModel = tryModel;
+
+        // Success — return immediately
+        if (response.ok) break;
+
+        // Non-retryable error — stop
+        if (!RETRY_CODES.includes(response.status)) break;
+
+        // Retryable error — log and try next model
+        lastError = data.error?.message || `${response.status}`;
+
+        // On 429 (rate limited), wait briefly before trying next model
+        if (response.status === 429 && i < tryOrder.length - 1) {
+          await sleep(500);
+        }
+      } catch (err) {
+        // Network error / timeout — try next model
+        lastError = err.message;
+        response = null;
+        data = null;
+      }
     }
 
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: data.error?.message || `OpenRouter API error ${response.status}`,
-        model: usedModel,
-        details: data,
+    // All models exhausted
+    if (!response || !response.ok) {
+      const status = response?.status || 503;
+      return res.status(status).json({
+        error:
+          data?.error?.message || lastError || `All models failed (${status})`,
+        model: usedModel || "none",
+        triedModels: tryOrder.length,
+        details: data || { message: lastError },
       });
     }
 
     const text = data.choices?.[0]?.message?.content || "";
 
-    return res.status(200).json({ text, model: usedModel, sources: [], raw: data });
+    return res
+      .status(200)
+      .json({ text, model: usedModel, sources: [], raw: data });
   } catch (err) {
-    return res.status(500).json({ error: "Function error", details: String(err) });
+    return res
+      .status(500)
+      .json({ error: "Function error", details: String(err) });
   }
 }
