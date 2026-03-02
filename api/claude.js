@@ -13,7 +13,7 @@ const ALLOWED_MODELS = [
   "openrouter/free", // Magic router — auto-selects any working free model
 ];
 
-const RETRY_CODES = [404, 429, 503, 502];
+const RETRY_CODES = [400, 404, 429, 502, 503];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
