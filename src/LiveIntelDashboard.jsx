@@ -7,10 +7,10 @@ import EventTimeline from "./components/EventTimeline";
 import MaritimePanel from "./components/MaritimePanel";
 
 // ════════════════════════════════════════════════════════════
-// UTILITY COMPONENTS
+// UTILITY COMPONENTS — Palantir/Bloomberg Style
 // ════════════════════════════════════════════════════════════
 
-function PulsingDot({ color = "#ef4444", size = 8 }) {
+function PulsingDot({ color = "#FF3B30", size = 8 }) {
   return (
     <span style={{ position: "relative", display: "inline-block", width: size, height: size, flexShrink: 0 }}>
       <span style={{ position: "absolute", width: size, height: size, borderRadius: "50%", background: color, animation: "pulse 2s ease-in-out infinite" }} />
@@ -21,16 +21,16 @@ function PulsingDot({ color = "#ef4444", size = 8 }) {
 
 function SeverityBadge({ level }) {
   const cfg =
-    level >= 5 ? { color: "#ef4444", label: "CRITIC" } :
-    level >= 4 ? { color: "#f97316", label: "RIDICAT" } :
-    level >= 3 ? { color: "#eab308", label: "MEDIU" } :
-    { color: "#22c55e", label: "SCĂZUT" };
+    level >= 5 ? { color: "#FF3B30", label: "CRITIC" } :
+    level >= 4 ? { color: "#FFB020", label: "RIDICAT" } :
+    level >= 3 ? { color: "#FFD60A", label: "MEDIU" } :
+    { color: "#30D158", label: "SCĂZUT" };
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 3,
-      padding: "1px 6px", borderRadius: 3, fontSize: "0.55rem",
+      padding: "1px 6px", borderRadius: 3, fontSize: "0.5rem",
       fontFamily: "var(--mono)", fontWeight: 700, letterSpacing: 1,
-      background: `${cfg.color}18`, border: `1px solid ${cfg.color}44`, color: cfg.color,
+      background: `${cfg.color}15`, border: `1px solid ${cfg.color}33`, color: cfg.color,
     }}>
       {cfg.label}
     </span>
@@ -39,9 +39,440 @@ function SeverityBadge({ level }) {
 
 function AgentStatusDot({ status, color }) {
   if (status === "running") return <span style={{ width: 7, height: 7, borderRadius: "50%", border: `2px solid ${color}`, borderTopColor: "transparent", display: "inline-block", animation: "spin 0.8s linear infinite" }} />;
-  if (status === "done") return <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block", boxShadow: `0 0 6px ${color}88` }} />;
-  if (status === "error") return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", display: "inline-block" }} />;
-  return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "rgba(255,255,255,0.12)", display: "inline-block" }} />;
+  if (status === "done") return <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block", boxShadow: `0 0 6px ${color}66` }} />;
+  if (status === "error") return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#FF3B30", display: "inline-block" }} />;
+  return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "rgba(255,255,255,0.1)", display: "inline-block" }} />;
+}
+
+// ── SVG Risk Gauge ──
+function RiskGauge({ value, max = 10, label, size = 100 }) {
+  const pct = Math.min(value / max, 1);
+  const color = pct >= 0.8 ? "#FF3B30" : pct >= 0.6 ? "#FFB020" : pct >= 0.4 ? "#FFD60A" : "#30D158";
+  const r = 36;
+  const cx = 50, cy = 44;
+  const circumHalf = Math.PI * r;
+  const dashLen = circumHalf * pct;
+  const dashGap = circumHalf - dashLen;
+
+  return (
+    <div style={{ textAlign: "center", width: size }}>
+      <svg viewBox="0 0 100 58" width="100%">
+        {/* Background arc */}
+        <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+          fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="5" strokeLinecap="round" />
+        {/* Value arc */}
+        <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+          fill="none" stroke={color} strokeWidth="5" strokeLinecap="round"
+          strokeDasharray={`${dashLen} ${dashGap}`}
+          style={{ filter: `drop-shadow(0 0 4px ${color}66)`, transition: "stroke-dasharray 1s ease" }} />
+        {/* Value text */}
+        <text x={cx} y={cy - 6} textAnchor="middle" fill={color} fontSize="18" fontWeight="800" fontFamily="var(--mono)">
+          {value}
+        </text>
+        <text x={cx} y={cy + 6} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="8" fontFamily="var(--mono)">
+          /{max}
+        </text>
+      </svg>
+      <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", letterSpacing: 2, color: "rgba(255,255,255,0.3)", marginTop: -4 }}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
+// ── Severity Progress Bar ──
+function SeverityBar({ level, max = 5 }) {
+  const pct = (level / max) * 100;
+  const color = level >= 5 ? "#FF3B30" : level >= 4 ? "#FFB020" : level >= 3 ? "#FFD60A" : "#30D158";
+  return (
+    <div style={{ height: 2, background: "rgba(255,255,255,0.06)", borderRadius: 1, overflow: "hidden", flex: 1 }}>
+      <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 1, transition: "width 0.5s ease" }} />
+    </div>
+  );
+}
+
+// ── Signal Card (Intelligence Grade) ──
+function SignalCard({ item, agentDef, onVerify, isNew }) {
+  const [expanded, setExpanded] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verification, setVerification] = useState(null);
+  const color = agentDef?.color || "#00E5FF";
+  const sevColor = item.severity >= 5 ? "#FF3B30" : item.severity >= 4 ? "#FFB020" : item.severity >= 3 ? "#FFD60A" : "#30D158";
+
+  const handleVerify = async (e) => {
+    e.stopPropagation();
+    if (verifying || verification) return;
+    setVerifying(true);
+    const result = await onVerify?.(item);
+    setVerification(result);
+    setVerifying(false);
+  };
+
+  // Source reliability (simulated based on verification and source)
+  const reliability = item.verified ? "A" : item.source?.includes("Reuters") || item.source?.includes("AP") ? "B" : "C";
+  const relColor = reliability === "A" ? "#30D158" : reliability === "B" ? "#00E5FF" : "#FFB020";
+
+  return (
+    <div
+      onClick={() => setExpanded(!expanded)}
+      style={{
+        position: "relative",
+        background: isNew ? "rgba(255,59,48,0.04)" : "#121821",
+        border: `1px solid ${isNew ? "rgba(255,59,48,0.15)" : "rgba(255,255,255,0.05)"}`,
+        borderRadius: 6, overflow: "hidden",
+        cursor: "pointer", transition: "all 0.2s",
+        animation: isNew ? "slideInLeft 0.5s cubic-bezier(0.16,1,0.3,1)" : "fadeIn 0.3s ease",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(0,229,255,0.2)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = isNew ? "rgba(255,59,48,0.15)" : "rgba(255,255,255,0.05)"; }}
+    >
+      {/* Severity indicator bar */}
+      <div style={{ height: 2, background: `linear-gradient(90deg, ${sevColor}, ${sevColor}44)` }} />
+
+      <div style={{ padding: "8px 10px" }}>
+        {/* Top row: agent + severity + reliability */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+            <span style={{ fontSize: "0.6rem", flexShrink: 0 }}>{agentDef?.icon || "📌"}</span>
+            <span style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", color, fontWeight: 700, letterSpacing: 1 }}>{agentDef?.name}</span>
+            {isNew && (
+              <span style={{
+                fontFamily: "var(--mono)", fontSize: "0.38rem", color: "#FF3B30",
+                padding: "0 4px", background: "rgba(255,59,48,0.15)", borderRadius: 2,
+                fontWeight: 700, animation: "pulse 1s ease infinite",
+              }}>NEW</span>
+            )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+            <span style={{
+              fontFamily: "var(--mono)", fontSize: "0.4rem", fontWeight: 700, letterSpacing: 1,
+              padding: "1px 4px", borderRadius: 2,
+              background: `${relColor}15`, color: relColor, border: `1px solid ${relColor}33`,
+            }}>REL:{reliability}</span>
+            <SeverityBadge level={item.severity || 3} />
+          </div>
+        </div>
+
+        {/* Headline */}
+        <h4 style={{
+          margin: "0 0 3px", fontSize: "0.68rem", fontWeight: 600, color: "#E5E7EB", lineHeight: 1.35,
+          fontFamily: "var(--sans)",
+          display: expanded ? "block" : "-webkit-box", WebkitLineClamp: expanded ? "unset" : 2,
+          WebkitBoxOrient: "vertical", overflow: expanded ? "visible" : "hidden",
+        }}>
+          {item.headline}
+        </h4>
+
+        {/* Severity progress */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "4px 0" }}>
+          <SeverityBar level={item.severity || 3} />
+          <span style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", color: sevColor, fontWeight: 700, flexShrink: 0 }}>
+            S{item.severity || 3}
+          </span>
+        </div>
+
+        {/* Expanded content */}
+        {expanded && (
+          <div style={{ animation: "fadeInUp 0.3s ease" }}>
+            <p style={{ margin: "4px 0 6px", fontSize: "0.62rem", color: "rgba(229,231,235,0.5)", lineHeight: 1.5, fontFamily: "var(--sans)" }}>
+              {item.summary}
+            </p>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              <button onClick={handleVerify} style={{
+                padding: "3px 8px", borderRadius: 4, background: "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.2)",
+                color: "#00E5FF", fontFamily: "var(--mono)", fontSize: "0.48rem", fontWeight: 700, letterSpacing: 1, cursor: "pointer",
+              }}>
+                {verifying ? "..." : verification ? "✓ VERIFIED" : "VERIFY"}
+              </button>
+              {verification && (
+                <span style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", color: verification.verified ? "#30D158" : "#FFB020" }}>
+                  {verification.confidence}% — {verification.crossVerification?.consensus || ""}
+                </span>
+              )}
+              {item.aiModelName && (
+                <span style={{ fontFamily: "var(--mono)", fontSize: "0.4rem", color: "rgba(255,255,255,0.2)", padding: "1px 5px", background: "rgba(255,255,255,0.03)", borderRadius: 3 }}>
+                  {item.aiModelName}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Footer: location + source + time */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+          <span style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", color: "rgba(229,231,235,0.25)" }}>
+            {item.location ? `📍${item.location} · ` : ""}{item.source}
+          </span>
+          <span style={{ fontFamily: "var(--mono)", fontSize: "0.4rem", color: "rgba(229,231,235,0.18)" }}>{item.time}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Alert Ticker ──
+function AlertTicker({ items }) {
+  if (!items.length) return null;
+  const doubled = [...items, ...items];
+  return (
+    <div style={{
+      background: "rgba(255,59,48,0.04)", borderBottom: "1px solid rgba(255,59,48,0.08)",
+      overflow: "hidden", whiteSpace: "nowrap", height: 26, display: "flex", alignItems: "center", flexShrink: 0,
+    }}>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 0, animation: `tickerScroll ${items.length * 7}s linear infinite` }}>
+        {doubled.map((item, i) => (
+          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, paddingRight: 40, flexShrink: 0 }}>
+            <span style={{ width: 4, height: 4, borderRadius: "50%", background: (item.severity || 3) >= 4 ? "#FF3B30" : "#FFB020", flexShrink: 0 }} />
+            <span style={{ fontSize: "0.58rem", fontFamily: "var(--mono)", color: "rgba(229,231,235,0.55)", letterSpacing: 0.3 }}>{item.text || item.headline}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Economic Impact Widget ──
+function EconomicWidget({ analysis }) {
+  const indicators = [
+    { label: "BRENT CRUDE", value: analysis?.oil_price || "~$80", change: analysis?.oil_change || "+2.3%", color: "#FFB020", up: true },
+    { label: "GOLD", value: analysis?.gold_price || "~$2,650", change: "+0.8%", color: "#FFD60A", up: true },
+    { label: "SHIPPING IDX", value: "BDI 1,420", change: "-3.1%", color: "#FF3B30", up: false },
+    { label: "VIX FEAR", value: "18.5", change: "+1.2", color: "#FFB020", up: true },
+  ];
+
+  return (
+    <div style={{ padding: "8px 10px" }}>
+      <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", letterSpacing: 2, color: "rgba(229,231,235,0.25)", marginBottom: 6 }}>
+        📊 ECONOMIC IMPACT
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        {indicators.map((ind) => (
+          <div key={ind.label} style={{ padding: "5px 8px", background: "rgba(255,255,255,0.02)", borderRadius: 4, border: "1px solid rgba(255,255,255,0.04)" }}>
+            <div style={{ fontFamily: "var(--mono)", fontSize: "0.38rem", letterSpacing: 1, color: "rgba(229,231,235,0.3)" }}>{ind.label}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontFamily: "var(--mono)", fontSize: "0.62rem", fontWeight: 700, color: "#E5E7EB" }}>{ind.value}</span>
+              <span style={{ fontFamily: "var(--mono)", fontSize: "0.48rem", fontWeight: 600, color: ind.up ? "#30D158" : "#FF3B30" }}>
+                {ind.up ? "▲" : "▼"} {ind.change}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {analysis?.oil_impact && (
+        <div style={{ marginTop: 6, padding: "4px 6px", borderLeft: "2px solid rgba(255,176,32,0.3)", borderRadius: "0 3px 3px 0" }}>
+          <p style={{ fontFamily: "var(--mono)", fontSize: "0.48rem", color: "rgba(229,231,235,0.4)", margin: 0, lineHeight: 1.4,
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {analysis.oil_impact}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Satellite Imagery Widget ──
+function SatelliteWidget() {
+  const sources = [
+    { name: "Sentinel Hub", url: "https://apps.sentinel-hub.com/eo-browser/", desc: "ESA Earth Observation", color: "#00E5FF" },
+    { name: "NASA FIRMS", url: "https://firms.modaps.eosdis.nasa.gov/map/", desc: "Fire & Thermal Anomalies", color: "#FF3B30" },
+    { name: "NASA Worldview", url: "https://worldview.earthdata.nasa.gov/", desc: "Real-time satellite imagery", color: "#A78BFA" },
+    { name: "Google Earth", url: "https://earth.google.com/web/", desc: "High-res imagery", color: "#30D158" },
+  ];
+
+  return (
+    <div style={{ padding: "8px 10px" }}>
+      <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", letterSpacing: 2, color: "rgba(229,231,235,0.25)", marginBottom: 6 }}>
+        🛰️ SATELLITE IMAGERY
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {sources.map((s) => (
+          <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer"
+            style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "5px 8px", borderRadius: 4,
+              background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)",
+              textDecoration: "none", transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = `${s.color}33`; e.currentTarget.style.background = `${s.color}08`; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.04)"; e.currentTarget.style.background = "rgba(255,255,255,0.02)"; }}
+          >
+            <div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", fontWeight: 600, color: s.color }}>{s.name}</div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "0.4rem", color: "rgba(229,231,235,0.25)" }}>{s.desc}</div>
+            </div>
+            <span style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: "rgba(229,231,235,0.2)" }}>↗</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Maritime Mini Widget ──
+function MaritimeMini() {
+  const chokepoints = [
+    { name: "HORMUZ", risk: "CRITICAL", color: "#FF3B30", flow: "20.5M bbl/d" },
+    { name: "BAB EL-M", risk: "HIGH", color: "#FFB020", flow: "6.2M bbl/d" },
+    { name: "SUEZ", risk: "MEDIUM", color: "#FFD60A", flow: "12% trade" },
+    { name: "MALACCA", risk: "LOW", color: "#30D158", flow: "25% trade" },
+  ];
+
+  return (
+    <div style={{ padding: "8px 10px" }}>
+      <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", letterSpacing: 2, color: "rgba(229,231,235,0.25)", marginBottom: 6 }}>
+        🚢 MARITIME CHOKEPOINTS
+      </div>
+      {chokepoints.map((c) => (
+        <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+          <span style={{ width: 5, height: 5, borderRadius: "50%", background: c.color, boxShadow: c.risk === "CRITICAL" ? `0 0 6px ${c.color}` : "none", animation: c.risk === "CRITICAL" ? "pulse 1.5s ease infinite" : "none", flexShrink: 0 }} />
+          <span style={{ fontFamily: "var(--mono)", fontSize: "0.52rem", fontWeight: 700, color: c.color, width: 65 }}>{c.name}</span>
+          <span style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", color: "rgba(229,231,235,0.25)", flex: 1 }}>{c.flow}</span>
+          <span style={{ fontFamily: "var(--mono)", fontSize: "0.38rem", letterSpacing: 1, color: c.color, background: `${c.color}10`, padding: "1px 4px", borderRadius: 2 }}>{c.risk}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── OSINT Sources Widget ──
+function SourcesWidget() {
+  return (
+    <div style={{ padding: "8px 10px" }}>
+      <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", letterSpacing: 2, color: "rgba(229,231,235,0.25)", marginBottom: 6 }}>
+        🔗 OSINT · {OSINT_SOURCES.length} ACCOUNTS · {NEWS_CHANNELS.length} NEWS
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 3, maxHeight: 200, overflowY: "auto" }}>
+        {OSINT_SOURCES.filter((s) => s.tier === 1).map((src) => (
+          <a key={src.handle} href={`https://x.com/${src.handle}`} target="_blank" rel="noopener noreferrer"
+            style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", color: "#00E5FF", padding: "2px 5px", background: "rgba(0,229,255,0.05)", border: "1px solid rgba(0,229,255,0.12)", borderRadius: 3, textDecoration: "none" }}
+            title={src.focus}>
+            @{src.handle}
+          </a>
+        ))}
+      </div>
+      <div style={{ fontFamily: "var(--mono)", fontSize: "0.4rem", color: "rgba(229,231,235,0.18)", marginTop: 4 }}>
+        +{OSINT_SOURCES.filter((s) => s.tier === 2).length} Tier 2 accounts
+      </div>
+    </div>
+  );
+}
+
+// ── System Log ──
+function SystemLog({ logs }) {
+  const endRef = useRef(null);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs.length]);
+  if (!logs.length) return null;
+  const typeColors = { system: "#00E5FF", success: "#30D158", error: "#FF3B30", alert: "#FFB020", info: "rgba(255,255,255,0.25)" };
+  return (
+    <div style={{ padding: "6px 10px" }}>
+      <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", letterSpacing: 2, color: "rgba(229,231,235,0.2)", marginBottom: 4 }}>💻 SYSTEM LOG</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 120, overflowY: "auto" }}>
+        {logs.slice(-20).map((log, i) => (
+          <div key={i} style={{ fontFamily: "var(--mono)", fontSize: "0.48rem", color: typeColors[log.type] || "rgba(255,255,255,0.2)" }}>
+            <span style={{ color: "rgba(229,231,235,0.12)" }}>[{log.time}]</span> {log.message}
+          </div>
+        ))}
+        <div ref={endRef} />
+      </div>
+    </div>
+  );
+}
+
+// ── Analysis Panel ──
+function AnalysisWidget({ analysis }) {
+  if (!analysis) return <div style={{ padding: "12px", fontFamily: "var(--mono)", fontSize: "0.52rem", color: "rgba(229,231,235,0.2)", textAlign: "center" }}>Analiză strategică în curs...</div>;
+  const color = analysis.threat_level >= 8 ? "#FF3B30" : analysis.threat_level >= 6 ? "#FFB020" : analysis.threat_level >= 4 ? "#FFD60A" : "#30D158";
+
+  return (
+    <div style={{ padding: "8px 10px" }}>
+      {analysis.situation_summary && (
+        <div style={{ marginBottom: 6 }}>
+          <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", letterSpacing: 2, color: "rgba(229,231,235,0.25)", marginBottom: 4 }}>SUMAR EXECUTIV</div>
+          <p style={{ fontFamily: "var(--sans)", fontSize: "0.58rem", color: "rgba(229,231,235,0.5)", margin: 0, lineHeight: 1.5 }}>{analysis.situation_summary}</p>
+        </div>
+      )}
+      {[
+        { key: "next_hours_prediction", icon: "⏳", label: "6-12H", c: "#FFB020" },
+        { key: "next_days_prediction", icon: "📅", label: "3-7D", c: "#00E5FF" },
+        { key: "proxy_status", icon: "🎯", label: "PROXY", c: "#FFB020" },
+        { key: "diplomatic_status", icon: "🏛️", label: "DIPLO", c: "#A78BFA" },
+      ].filter(({ key }) => analysis[key]).map(({ key, icon, label, c }) => (
+        <div key={key} style={{ padding: "4px 6px", marginBottom: 4, borderLeft: `2px solid ${c}33`, borderRadius: "0 3px 3px 0" }}>
+          <div style={{ fontFamily: "var(--mono)", fontSize: "0.4rem", letterSpacing: 1, color: c }}>{icon} {label}</div>
+          <p style={{ fontFamily: "var(--sans)", fontSize: "0.52rem", color: "rgba(229,231,235,0.4)", margin: "2px 0 0", lineHeight: 1.4,
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{analysis[key]}</p>
+        </div>
+      ))}
+      {analysis.key_risks?.length > 0 && (
+        <div style={{ padding: "4px 6px", background: "rgba(255,59,48,0.04)", borderRadius: 4, border: "1px solid rgba(255,59,48,0.08)" }}>
+          <div style={{ fontFamily: "var(--mono)", fontSize: "0.4rem", letterSpacing: 1, color: "#FF3B30", marginBottom: 3 }}>⚠ KEY RISKS</div>
+          {analysis.key_risks.slice(0, 3).map((r, i) => (
+            <div key={i} style={{ fontFamily: "var(--sans)", fontSize: "0.5rem", color: "rgba(229,231,235,0.4)", marginBottom: 2, paddingLeft: 6, borderLeft: "1px solid rgba(255,59,48,0.15)" }}>{r}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Webcam Strip ──
+const WEBCAM_STRIP = [
+  { id: "jNZM_H6q1rY", name: "Jerusalem", flag: "🇮🇱" },
+  { id: "LMM0FN5jJaE", name: "Tel Aviv", flag: "🇮🇱" },
+  { id: "4K_-EhKjYjs", name: "Dubai", flag: "🇦🇪" },
+  { id: "9eN4Jbxvbyg", name: "Mecca", flag: "🇸🇦" },
+  { id: "KJGASBMieBo", name: "Beirut", flag: "🇱🇧" },
+  { id: "wDkHBAdYXD0", name: "Istanbul", flag: "🇹🇷" },
+  { id: "C6GKe0skDDE", name: "Doha", flag: "🇶🇦" },
+  { id: "uEMKGCKBKdQ", name: "Haifa", flag: "🇮🇱" },
+];
+
+const NEWS_STREAMS = [
+  { name: "Al Jazeera", url: "https://www.youtube.com/@AlJazeeraEnglish/live", color: "#00E5FF" },
+  { name: "France 24", url: "https://www.youtube.com/@FRANCE24English/live", color: "#A78BFA" },
+  { name: "Sky News", url: "https://www.youtube.com/@SkyNews/live", color: "#FFB020" },
+];
+
+function WebcamBottomStrip({ onOpenCams }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 0, height: "100%", overflowX: "auto", padding: "0 6px" }}>
+      {WEBCAM_STRIP.map((cam) => (
+        <a key={cam.id} href={`https://www.youtube.com/watch?v=${cam.id}`} target="_blank" rel="noopener noreferrer"
+          style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "3px 5px", borderRadius: 4, textDecoration: "none", flexShrink: 0, transition: "background 0.15s" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+        >
+          <div style={{ position: "relative", width: 56, height: 32, borderRadius: 3, overflow: "hidden", background: "#121821", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <img src={`https://img.youtube.com/vi/${cam.id}/mqdefault.jpg`} alt={cam.name}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              onError={(e) => { e.target.style.display = "none"; }} />
+            <div style={{ position: "absolute", bottom: 1, left: 2, display: "flex", alignItems: "center", gap: 2, background: "rgba(0,0,0,0.7)", padding: "1px 3px", borderRadius: 2 }}>
+              <span style={{ width: 3, height: 3, borderRadius: "50%", background: "#FF3B30", animation: "pulse 1.5s ease infinite" }} />
+              <span style={{ fontFamily: "var(--mono)", fontSize: "0.32rem", color: "#FF3B30" }}>LIVE</span>
+            </div>
+          </div>
+          <span style={{ fontFamily: "var(--mono)", fontSize: "0.38rem", color: "rgba(229,231,235,0.3)", marginTop: 1 }}>{cam.name}</span>
+        </a>
+      ))}
+      <div style={{ width: 1, height: 36, background: "rgba(255,255,255,0.06)", margin: "0 4px", flexShrink: 0 }} />
+      {NEWS_STREAMS.map((s) => (
+        <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer"
+          style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "3px 6px", textDecoration: "none", flexShrink: 0, borderRadius: 4, transition: "background 0.15s" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+        >
+          <div style={{ width: 48, height: 32, borderRadius: 3, background: `${s.color}10`, border: `1px solid ${s.color}22`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", color: s.color, fontWeight: 700 }}>{s.name.split(" ")[0]}</span>
+          </div>
+          <span style={{ fontFamily: "var(--mono)", fontSize: "0.35rem", color: "rgba(229,231,235,0.2)", marginTop: 1 }}>24/7 ↗</span>
+        </a>
+      ))}
+      <button onClick={onOpenCams} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "3px 8px", borderRadius: 4, cursor: "pointer", flexShrink: 0, marginLeft: 4, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
+        <span style={{ fontSize: "0.8rem" }}>📹</span>
+        <span style={{ fontFamily: "var(--mono)", fontSize: "0.35rem", color: "rgba(229,231,235,0.25)" }}>ALL</span>
+      </button>
+    </div>
+  );
 }
 
 // ── API Key Modal ──
@@ -55,90 +486,62 @@ function ApiKeyModal({ onSubmit }) {
     try {
       const healthRes = await fetch("/api/claude");
       const health = await healthRes.json();
-      if (!healthRes.ok) { setTestStatus({ ok: false, message: `Eroare: ${JSON.stringify(health)}` }); return; }
+      if (!healthRes.ok) { setTestStatus({ ok: false, message: `Error: ${JSON.stringify(health)}` }); return; }
       const apiRes = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": sanitizeKey(key) || "test" },
         body: JSON.stringify({ prompt: "Say OK" }),
       });
       const apiData = await apiRes.json();
-      if (apiRes.ok && apiData.text) setTestStatus({ ok: true, message: `Conexiune OK! (${health.hasApiKey ? "ENV var setat" : "key din browser"})` });
+      if (apiRes.ok && apiData.text) setTestStatus({ ok: true, message: `Connection OK! (${health.hasApiKey ? "ENV key" : "browser key"})` });
       else setTestStatus({ ok: false, message: `API error ${apiRes.status}: ${apiData.error || "Unknown"}` });
-    } catch (err) { setTestStatus({ ok: false, message: `Eroare: ${err.message}` }); }
+    } catch (err) { setTestStatus({ ok: false, message: `Error: ${err.message}` }); }
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", background: "radial-gradient(ellipse at 50% 30%, rgba(239,68,68,0.08) 0%, #070b0f 70%)" }}>
-      {/* Grid overlay */}
-      <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)", backgroundSize: "40px 40px", pointerEvents: "none" }} />
-      <div style={{ position: "relative", background: "rgba(10,14,20,0.95)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "44px 40px", maxWidth: 500, width: "90%", animation: "fadeInUp 0.4s ease", backdropFilter: "blur(20px)", boxShadow: "0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(239,68,68,0.1)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <PulsingDot color="#ef4444" size={10} />
-          <h2 style={{ fontFamily: "var(--mono)", fontSize: "1.2rem", fontWeight: 800, letterSpacing: 4, color: "#ef4444" }}>
-            INTEL LIVE
-          </h2>
-          <span style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", letterSpacing: 2, color: "rgba(255,255,255,0.3)", padding: "2px 6px", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 3 }}>v2.0</span>
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", background: "radial-gradient(ellipse at 50% 30%, rgba(0,229,255,0.05) 0%, #0B0F14 70%)" }}>
+      <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(0,229,255,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,255,0.015) 1px, transparent 1px)", backgroundSize: "50px 50px" }} />
+      <div style={{ position: "relative", background: "rgba(18,24,33,0.95)", border: "1px solid rgba(0,229,255,0.15)", borderRadius: 10, padding: "36px 32px", maxWidth: 440, width: "90%", animation: "fadeInUp 0.5s ease", backdropFilter: "blur(20px)", boxShadow: "0 30px 60px rgba(0,0,0,0.5)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <PulsingDot color="#FF3B30" size={10} />
+          <span style={{ fontFamily: "var(--display)", fontSize: "1.3rem", fontWeight: 800, letterSpacing: 2, color: "#00E5FF" }}>INTEL</span>
+          <span style={{ fontFamily: "var(--display)", fontSize: "1.3rem", fontWeight: 800, letterSpacing: 2, color: "#E5E7EB" }}>LIVE</span>
         </div>
-        <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.75rem", marginBottom: 4, fontFamily: "var(--mono)" }}>
-          Centru de comandă — monitorizare conflicte în timp real
-        </p>
-        <p style={{ color: "rgba(255,255,255,0.25)", fontSize: "0.62rem", marginBottom: 20, fontFamily: "var(--mono)", lineHeight: 1.8 }}>
-          {AI_MODELS.length} modele AI · 7 agenți OSINT · {OSINT_SOURCES.length} surse · hartă interactivă · analiză cross-verificată
+        <p style={{ color: "rgba(229,231,235,0.4)", fontSize: "0.68rem", fontFamily: "var(--sans)", marginBottom: 20 }}>
+          Command Center — Real-time Intelligence Platform
         </p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 20 }}>
-          {[
-            { icon: "🗺️", label: "HARTĂ CONFLICT" },
-            { icon: "📡", label: "7 AGENȚI AI" },
-            { icon: "🚢", label: "MONITOR MARITIM" },
-            { icon: "📹", label: "CAMERE LIVE" },
-            { icon: "🔍", label: "CROSS-VERIFICARE" },
-            { icon: "⚡", label: "TIMP REAL" },
-          ].map((f) => (
-            <div key={f.label} style={{ padding: "8px", background: "rgba(255,255,255,0.02)", borderRadius: 6, border: "1px solid rgba(255,255,255,0.06)", textAlign: "center" }}>
-              <div style={{ fontSize: "1rem", marginBottom: 2 }}>{f.icon}</div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 1 }}>{f.label}</div>
-            </div>
-          ))}
-        </div>
-
-        <label style={{ display: "block", fontFamily: "var(--mono)", fontSize: "0.55rem", letterSpacing: 2, color: "rgba(255,255,255,0.3)", marginBottom: 6 }}>
+        <label style={{ display: "block", fontFamily: "var(--mono)", fontSize: "0.5rem", letterSpacing: 2, color: "rgba(229,231,235,0.25)", marginBottom: 6 }}>
           OPENROUTER API KEY
         </label>
-        <input
-          type="password" value={key}
+        <input type="password" value={key}
           onChange={(e) => setKey(e.target.value.replace(/[^\x20-\x7E]/g, ""))}
           onKeyDown={(e) => e.key === "Enter" && sanitizeKey(key) && onSubmit(sanitizeKey(key))}
           placeholder="sk-or-..."
-          style={{ width: "100%", padding: "11px 14px", borderRadius: 6, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#fff", fontFamily: "var(--mono)", fontSize: "0.82rem", outline: "none", boxSizing: "border-box" }}
-          onFocus={(e) => (e.target.style.borderColor = "rgba(239,68,68,0.5)")}
-          onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.08)")}
+          style={{ width: "100%", padding: "11px 14px", borderRadius: 6, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(0,229,255,0.15)", color: "#fff", fontFamily: "var(--mono)", fontSize: "0.82rem", outline: "none", boxSizing: "border-box" }}
+          onFocus={(e) => (e.target.style.borderColor = "rgba(0,229,255,0.4)")}
+          onBlur={(e) => (e.target.style.borderColor = "rgba(0,229,255,0.15)")}
           autoFocus
         />
-        <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "0.55rem", marginTop: 5, fontFamily: "var(--mono)" }}>
-          openrouter.ai/settings/keys — gratuit
+        <p style={{ color: "rgba(229,231,235,0.18)", fontSize: "0.5rem", marginTop: 5, fontFamily: "var(--mono)" }}>
+          openrouter.ai/settings/keys — free models included
         </p>
-
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-          <button onClick={testConnection} disabled={testStatus === "testing"} style={{
-            padding: "10px 16px", borderRadius: 6, background: "rgba(6,182,212,0.08)", border: "1px solid rgba(6,182,212,0.2)",
-            color: "#06b6d4", fontFamily: "var(--mono)", fontSize: "0.6rem", fontWeight: 700, letterSpacing: 1, cursor: "pointer",
-          }}>
-            {testStatus === "testing" ? "TESTARE..." : "TESTEAZĂ"}
+          <button onClick={testConnection} disabled={testStatus === "testing"} style={{ padding: "10px 16px", borderRadius: 6, background: "rgba(0,229,255,0.06)", border: "1px solid rgba(0,229,255,0.2)", color: "#00E5FF", fontFamily: "var(--mono)", fontSize: "0.58rem", fontWeight: 700, letterSpacing: 1, cursor: "pointer" }}>
+            {testStatus === "testing" ? "TESTING..." : "TEST"}
           </button>
           <button onClick={() => sanitizeKey(key) && onSubmit(sanitizeKey(key))} disabled={!key.trim()} style={{
             flex: 1, padding: "10px 0", borderRadius: 6,
-            background: key.trim() ? "#ef4444" : "rgba(255,255,255,0.05)",
-            color: key.trim() ? "#fff" : "rgba(255,255,255,0.25)",
-            fontFamily: "var(--mono)", fontSize: "0.72rem", fontWeight: 700, letterSpacing: 2, cursor: key.trim() ? "pointer" : "not-allowed",
+            background: key.trim() ? "#00E5FF" : "rgba(255,255,255,0.04)",
+            color: key.trim() ? "#0B0F14" : "rgba(255,255,255,0.2)",
+            fontFamily: "var(--mono)", fontSize: "0.72rem", fontWeight: 800, letterSpacing: 2, cursor: key.trim() ? "pointer" : "not-allowed",
           }}>
-            ACTIVEAZĂ SISTEMUL
+            ACTIVATE
           </button>
         </div>
-
         {testStatus && testStatus !== "testing" && (
-          <div style={{ marginTop: 10, padding: "7px 12px", borderRadius: 5, background: testStatus.ok ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)", border: `1px solid ${testStatus.ok ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)"}` }}>
-            <div style={{ fontFamily: "var(--mono)", fontSize: "0.58rem", color: testStatus.ok ? "#22c55e" : "#ef4444" }}>
+          <div style={{ marginTop: 10, padding: "7px 12px", borderRadius: 5, background: testStatus.ok ? "rgba(48,209,88,0.08)" : "rgba(255,59,48,0.08)", border: `1px solid ${testStatus.ok ? "rgba(48,209,88,0.2)" : "rgba(255,59,48,0.2)"}` }}>
+            <div style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: testStatus.ok ? "#30D158" : "#FF3B30" }}>
               {testStatus.ok ? "✓ " : "✗ "}{testStatus.message}
             </div>
           </div>
@@ -148,383 +551,8 @@ function ApiKeyModal({ onSubmit }) {
   );
 }
 
-// ── Compact Intel Card (for feed panel) ──
-function CompactIntelCard({ item, agentDef, onVerify, isNew }) {
-  const [expanded, setExpanded] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [verification, setVerification] = useState(null);
-  const color = agentDef?.color || "#888";
-  const severityColor = item.severity >= 5 ? "#ef4444" : item.severity >= 4 ? "#f97316" : item.severity >= 3 ? "#eab308" : "#22c55e";
-
-  const handleVerify = async (e) => {
-    e.stopPropagation();
-    if (verifying || verification) return;
-    setVerifying(true);
-    const result = await onVerify?.(item);
-    setVerification(result);
-    setVerifying(false);
-  };
-
-  return (
-    <div
-      onClick={() => setExpanded(!expanded)}
-      style={{
-        background: isNew ? "rgba(239,68,68,0.04)" : "rgba(255,255,255,0.02)",
-        borderLeft: `2px solid ${severityColor}`,
-        borderBottom: "1px solid rgba(255,255,255,0.05)",
-        padding: "8px 10px",
-        cursor: "pointer",
-        transition: "background 0.15s",
-        animation: isNew ? "slideInLeft 0.4s ease" : "none",
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = isNew ? "rgba(239,68,68,0.04)" : "rgba(255,255,255,0.02)"; }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3, gap: 6 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
-          <span style={{ fontSize: "0.65rem", flexShrink: 0 }}>{agentDef?.icon || "📌"}</span>
-          <span style={{ fontFamily: "var(--mono)", fontSize: "0.48rem", color, fontWeight: 700, letterSpacing: 1, flexShrink: 0 }}>{agentDef?.name || item.category}</span>
-          {isNew && <span style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", color: "#ef4444", fontWeight: 700, animation: "pulse 1s ease infinite" }}>●NOU</span>}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-          {item.verified && <span style={{ color: "#22c55e", fontSize: "0.55rem" }}>✓</span>}
-          <SeverityBadge level={item.severity || 3} />
-        </div>
-      </div>
-      <h4 style={{ margin: "0 0 3px", fontSize: "0.72rem", fontWeight: 600, color: "#e2e8f0", lineHeight: 1.35, display: expanded ? "block" : "-webkit-box", WebkitLineClamp: expanded ? "unset" : 2, WebkitBoxOrient: "vertical", overflow: expanded ? "visible" : "hidden" }}>
-        {item.headline}
-      </h4>
-      {expanded && (
-        <>
-          <p style={{ margin: "4px 0 6px", fontSize: "0.66rem", color: "rgba(255,255,255,0.5)", lineHeight: 1.5 }}>
-            {item.summary}
-          </p>
-          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-            <button onClick={handleVerify} style={{
-              padding: "2px 8px", borderRadius: 3, background: "rgba(6,182,212,0.1)", border: "1px solid rgba(6,182,212,0.2)",
-              color: "#06b6d4", fontFamily: "var(--mono)", fontSize: "0.5rem", letterSpacing: 1, cursor: "pointer",
-            }}>
-              {verifying ? "..." : verification ? "✓ VERIFICAT" : "VERIFICĂ"}
-            </button>
-            {verification && (
-              <span style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: verification.verified ? "#22c55e" : "#f97316" }}>
-                {verification.confidence}% — {verification.crossVerification?.consensus || ""}
-              </span>
-            )}
-          </div>
-        </>
-      )}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
-        <span style={{ fontFamily: "var(--mono)", fontSize: "0.48rem", color: "rgba(255,255,255,0.25)" }}>
-          {item.location ? `📍${item.location} · ` : ""}{item.source}
-        </span>
-        <span style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", color: "rgba(255,255,255,0.2)" }}>{item.time}</span>
-      </div>
-    </div>
-  );
-}
-
-// ── Live Ticker ──
-function LiveTicker({ items }) {
-  if (!items.length) return null;
-  const doubled = [...items, ...items];
-  return (
-    <div style={{ background: "rgba(239,68,68,0.05)", borderBottom: "1px solid rgba(239,68,68,0.1)", overflow: "hidden", whiteSpace: "nowrap", height: 26, display: "flex", alignItems: "center", flexShrink: 0 }}>
-      <div style={{ display: "inline-flex", alignItems: "center", gap: 0, animation: `tickerScroll ${items.length * 7}s linear infinite` }}>
-        {doubled.map((item, i) => (
-          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, paddingRight: 40, flexShrink: 0 }}>
-            <span style={{ width: 4, height: 4, borderRadius: "50%", background: (item.severity || 3) >= 4 ? "#ef4444" : "#f97316", flexShrink: 0 }} />
-            <span style={{ fontSize: "0.6rem", fontFamily: "var(--mono)", color: "rgba(255,255,255,0.65)", letterSpacing: 0.3 }}>{item.text || item.headline}</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Maritime Summary Bar ──
-const MARITIME_STATUS = [
-  { name: "Strâmtoarea Hormuz", short: "HORMUZ", risk: "critical", color: "#ef4444", bbl: "20.5M bbl/zi", threat: "Mine · Dronă" },
-  { name: "Bab el-Mandeb", short: "BAB EL-M", risk: "high", color: "#f97316", bbl: "6.2M bbl/zi", threat: "Houthi activi" },
-  { name: "Canalul Suez", short: "SUEZ", risk: "medium", color: "#eab308", bbl: "12% comerț", threat: "Devieri trafic" },
-  { name: "Strâmtoarea Malacca", short: "MALACCA", risk: "low", color: "#22c55e", bbl: "25% maritim", threat: "Piraterie" },
-];
-
-function MaritimeBar() {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 0, height: "100%", padding: "0 10px", overflowX: "auto" }}>
-      <span style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", letterSpacing: 2, color: "rgba(255,255,255,0.25)", marginRight: 10, flexShrink: 0 }}>MARITIM</span>
-      {MARITIME_STATUS.map((s) => (
-        <div key={s.short} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRight: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.color, boxShadow: s.risk === "critical" ? `0 0 6px ${s.color}` : "none", animation: s.risk === "critical" ? "pulse 1.5s ease infinite" : "none" }} />
-          <div>
-            <div style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", fontWeight: 700, color: s.color }}>{s.short}</div>
-            <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", color: "rgba(255,255,255,0.3)" }}>{s.threat}</div>
-          </div>
-          <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", color: "rgba(255,255,255,0.25)" }}>{s.bbl}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Webcam Thumbnail Strip ──
-const WEBCAM_STRIP = [
-  { id: "jNZM_H6q1rY", name: "Western Wall", city: "Jerusalem", flag: "🇮🇱", channelUrl: "https://www.youtube.com/watch?v=jNZM_H6q1rY" },
-  { id: "LMM0FN5jJaE", name: "Tel Aviv Beach", city: "Tel Aviv", flag: "🇮🇱", channelUrl: "https://www.youtube.com/watch?v=LMM0FN5jJaE" },
-  { id: "4K_-EhKjYjs", name: "Dubai Skyline", city: "Dubai", flag: "🇦🇪", channelUrl: "https://www.youtube.com/watch?v=4K_-EhKjYjs" },
-  { id: "9eN4Jbxvbyg", name: "Mecca Live", city: "Mecca", flag: "🇸🇦", channelUrl: "https://www.youtube.com/watch?v=9eN4Jbxvbyg" },
-  { id: "KJGASBMieBo", name: "Beirut View", city: "Beirut", flag: "🇱🇧", channelUrl: "https://www.youtube.com/watch?v=KJGASBMieBo" },
-  { id: "wDkHBAdYXD0", name: "Bosphorus", city: "Istanbul", flag: "🇹🇷", channelUrl: "https://www.youtube.com/watch?v=wDkHBAdYXD0" },
-  { id: "C6GKe0skDDE", name: "Doha Bay", city: "Doha", flag: "🇶🇦", channelUrl: "https://www.youtube.com/watch?v=C6GKe0skDDE" },
-  { id: "uEMKGCKBKdQ", name: "Haifa Port", city: "Haifa", flag: "🇮🇱", channelUrl: "https://www.youtube.com/watch?v=uEMKGCKBKdQ" },
-];
-
-// Additional live news channel streams
-const NEWS_STREAMS = [
-  { name: "Al Jazeera", flag: "📺", url: "https://www.youtube.com/@AlJazeeraEnglish/live", color: "#06b6d4" },
-  { name: "France 24", flag: "📺", url: "https://www.youtube.com/@FRANCE24English/live", color: "#3b82f6" },
-  { name: "DW News", flag: "📺", url: "https://www.youtube.com/@dwnews/live", color: "#8b5cf6" },
-  { name: "Sky News", flag: "📺", url: "https://www.youtube.com/@SkyNews/live", color: "#f97316" },
-  { name: "BBC World", flag: "📺", url: "https://www.youtube.com/@BBCNews/live", color: "#ef4444" },
-];
-
-function WebcamStrip({ onOpenCams }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 0, height: "100%", overflowX: "auto", padding: "0 4px" }}>
-      <span style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", letterSpacing: 2, color: "rgba(255,255,255,0.25)", padding: "0 8px", flexShrink: 0 }}>CAMERE</span>
-      {WEBCAM_STRIP.map((cam) => (
-        <a
-          key={cam.id}
-          href={cam.channelUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ display: "flex", flexDirection: "column", alignItems: "center", textDecoration: "none", padding: "4px 5px", borderRadius: 5, transition: "background 0.15s", flexShrink: 0 }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-          title={`${cam.flag} ${cam.name} — ${cam.city}`}
-        >
-          <div style={{ position: "relative", width: 64, height: 36, borderRadius: 3, overflow: "hidden", background: "#1a1a2e", border: "1px solid rgba(255,255,255,0.08)" }}>
-            <img
-              src={`https://img.youtube.com/vi/${cam.id}/mqdefault.jpg`}
-              alt={cam.name}
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-              onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
-            />
-            <div style={{ display: "none", position: "absolute", inset: 0, alignItems: "center", justifyContent: "center", background: "#0f172a" }}>
-              <span style={{ fontSize: "1rem" }}>{cam.flag}</span>
-            </div>
-            <div style={{ position: "absolute", bottom: 2, left: 2, display: "flex", alignItems: "center", gap: 2, background: "rgba(0,0,0,0.7)", padding: "1px 3px", borderRadius: 2 }}>
-              <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#ef4444", animation: "pulse 1.5s ease infinite" }} />
-              <span style={{ fontFamily: "var(--mono)", fontSize: "0.38rem", color: "#ef4444" }}>LIVE</span>
-            </div>
-          </div>
-          <span style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", color: "rgba(255,255,255,0.4)", marginTop: 2, letterSpacing: 0.3 }}>{cam.city}</span>
-        </a>
-      ))}
-      <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.06)", margin: "0 4px", flexShrink: 0 }} />
-      {NEWS_STREAMS.map((s) => (
-        <a
-          key={s.name}
-          href={s.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ display: "flex", flexDirection: "column", alignItems: "center", textDecoration: "none", padding: "4px 6px", borderRadius: 5, transition: "background 0.15s", flexShrink: 0 }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-        >
-          <div style={{ width: 56, height: 36, borderRadius: 3, background: `${s.color}15`, border: `1px solid ${s.color}33`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: "0.52rem", color: s.color, fontWeight: 700, textAlign: "center", lineHeight: 1.2 }}>{s.name}</span>
-          </div>
-          <span style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", color: "rgba(255,255,255,0.3)", marginTop: 2 }}>LIVE ↗</span>
-        </a>
-      ))}
-      <button
-        onClick={onOpenCams}
-        style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "4px 8px", borderRadius: 5, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", cursor: "pointer", flexShrink: 0, marginLeft: 4 }}
-      >
-        <span style={{ fontSize: "0.9rem" }}>📹</span>
-        <span style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", color: "rgba(255,255,255,0.3)", marginTop: 1 }}>TOATE</span>
-      </button>
-    </div>
-  );
-}
-
-// ── Analysis Summary ──
-function AnalysisSummaryPanel({ analysis }) {
-  if (!analysis) return (
-    <div style={{ padding: "8px 10px", fontFamily: "var(--mono)", fontSize: "0.55rem", color: "rgba(255,255,255,0.2)", textAlign: "center" }}>
-      Analiză strategică în curs...
-    </div>
-  );
-  const color = analysis.threat_level >= 8 ? "#ef4444" : analysis.threat_level >= 6 ? "#f97316" : analysis.threat_level >= 4 ? "#eab308" : "#22c55e";
-  return (
-    <div style={{ padding: "8px 10px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <span style={{ fontFamily: "var(--mono)", fontSize: "0.48rem", letterSpacing: 2, color: "rgba(255,255,255,0.3)" }}>ANALIZĂ STRATEGICĂ</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontFamily: "var(--mono)", fontSize: "0.9rem", fontWeight: 800, color }}>{analysis.threat_level}/10</span>
-          <span style={{ fontFamily: "var(--mono)", fontSize: "0.52rem", fontWeight: 700, color }}>{analysis.threat_label}</span>
-        </div>
-      </div>
-      {/* Threat bar */}
-      <div style={{ height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 2, marginBottom: 6, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${(analysis.threat_level / 10) * 100}%`, background: `linear-gradient(90deg, ${color}88, ${color})`, transition: "width 1s" }} />
-      </div>
-      {analysis.situation_summary && (
-        <p style={{ fontFamily: "var(--mono)", fontSize: "0.6rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.6, margin: "0 0 6px", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-          {analysis.situation_summary}
-        </p>
-      )}
-      <div style={{ display: "flex", gap: 8 }}>
-        {analysis.escalation_probability != null && (
-          <div style={{ flex: 1, background: "rgba(255,255,255,0.02)", borderRadius: 4, padding: "4px 6px" }}>
-            <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", color: "rgba(255,255,255,0.25)", letterSpacing: 1 }}>ESCALADARE</div>
-            <div style={{ fontFamily: "var(--mono)", fontSize: "0.75rem", fontWeight: 700, color: analysis.escalation_probability > 60 ? "#ef4444" : "#f97316" }}>{analysis.escalation_probability}%</div>
-          </div>
-        )}
-        {analysis.nuclear_risk != null && (
-          <div style={{ flex: 1, background: "rgba(255,255,255,0.02)", borderRadius: 4, padding: "4px 6px" }}>
-            <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", color: "rgba(255,255,255,0.25)", letterSpacing: 1 }}>NUCLEAR</div>
-            <div style={{ fontFamily: "var(--mono)", fontSize: "0.75rem", fontWeight: 700, color: "#ef4444" }}>{analysis.nuclear_risk}%</div>
-          </div>
-        )}
-      </div>
-      {analysis.next_hours_prediction && (
-        <div style={{ marginTop: 6, padding: "4px 6px", background: "rgba(249,115,22,0.06)", borderLeft: "2px solid rgba(249,115,22,0.3)", borderRadius: "0 4px 4px 0" }}>
-          <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", letterSpacing: 1, color: "#f97316", marginBottom: 2 }}>PREDICȚIE 6-12 ORE</div>
-          <p style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "rgba(255,255,255,0.5)", margin: 0, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{analysis.next_hours_prediction}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Full Analysis Panel ──
-function FullAnalysisPanel({ analysis }) {
-  if (!analysis) return <div style={{ padding: 20, fontFamily: "var(--mono)", fontSize: "0.6rem", color: "rgba(255,255,255,0.25)", textAlign: "center" }}>Analiză în curs...</div>;
-  const color = analysis.threat_level >= 8 ? "#ef4444" : analysis.threat_level >= 6 ? "#f97316" : analysis.threat_level >= 4 ? "#eab308" : "#22c55e";
-  return (
-    <div style={{ padding: "10px", display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ padding: "10px 12px", background: "rgba(255,255,255,0.02)", borderRadius: 6, border: "1px solid rgba(255,255,255,0.06)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <span style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", letterSpacing: 2, color: "rgba(255,255,255,0.3)" }}>NIVEL AMENINȚARE</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: "1.1rem", fontWeight: 800, color }}>{analysis.threat_level}/10</span>
-            <span style={{ fontFamily: "var(--mono)", fontSize: "0.6rem", fontWeight: 700, color }}>{analysis.threat_label}</span>
-          </div>
-        </div>
-        <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${(analysis.threat_level / 10) * 100}%`, background: `linear-gradient(90deg, ${color}88, ${color})` }} />
-        </div>
-      </div>
-      {analysis.situation_summary && (
-        <div style={{ padding: "8px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 6, border: "1px solid rgba(255,255,255,0.06)" }}>
-          <div style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", letterSpacing: 2, color: "rgba(255,255,255,0.25)", marginBottom: 4 }}>SUMAR EXECUTIV</div>
-          <p style={{ fontFamily: "var(--mono)", fontSize: "0.62rem", color: "rgba(255,255,255,0.6)", margin: 0, lineHeight: 1.6 }}>{analysis.situation_summary}</p>
-        </div>
-      )}
-      {(analysis.escalation_probability != null || analysis.nuclear_risk != null) && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-          {analysis.escalation_probability != null && (
-            <div style={{ padding: "8px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 6, border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", letterSpacing: 1, color: "rgba(255,255,255,0.25)", marginBottom: 3 }}>ESCALADARE</div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "0.95rem", fontWeight: 800, color: analysis.escalation_probability > 60 ? "#ef4444" : "#f97316" }}>{analysis.escalation_probability}%</div>
-              <div style={{ height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 2, marginTop: 4 }}>
-                <div style={{ height: "100%", width: `${analysis.escalation_probability}%`, background: analysis.escalation_probability > 60 ? "#ef4444" : "#f97316", borderRadius: 2 }} />
-              </div>
-            </div>
-          )}
-          {analysis.nuclear_risk != null && (
-            <div style={{ padding: "8px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 6, border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", letterSpacing: 1, color: "rgba(255,255,255,0.25)", marginBottom: 3 }}>RISC NUCLEAR</div>
-              <div style={{ fontFamily: "var(--mono)", fontSize: "0.95rem", fontWeight: 800, color: "#ef4444" }}>{analysis.nuclear_risk}%</div>
-              <div style={{ height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 2, marginTop: 4 }}>
-                <div style={{ height: "100%", width: `${analysis.nuclear_risk}%`, background: "#ef4444", borderRadius: 2 }} />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      {[
-        { key: "next_hours_prediction", icon: "⏳", label: "PREDICȚIE 6-12 ORE", color: "#f97316" },
-        { key: "next_days_prediction", icon: "📅", label: "PERSPECTIVĂ 3-7 ZILE", color: "#06b6d4" },
-        { key: "oil_impact", icon: "🛢️", label: "IMPACT PETROL", color: "#eab308" },
-        { key: "proxy_status", icon: "🎯", label: "FORȚE PROXY", color: "#f97316" },
-        { key: "diplomatic_status", icon: "🏛️", label: "DIPLOMATIC", color: "#8b5cf6" },
-      ].filter(({ key }) => analysis[key]).map(({ key, icon, label, color: c }) => (
-        <div key={key} style={{ padding: "7px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 6, borderLeft: `2px solid ${c}44` }}>
-          <div style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", letterSpacing: 1, color: c, marginBottom: 3 }}>{icon} {label}</div>
-          <p style={{ fontFamily: "var(--mono)", fontSize: "0.6rem", color: "rgba(255,255,255,0.5)", margin: 0, lineHeight: 1.5 }}>{analysis[key]}</p>
-        </div>
-      ))}
-      {analysis.key_risks?.length > 0 && (
-        <div style={{ padding: "7px 10px", background: "rgba(239,68,68,0.04)", borderRadius: 6, border: "1px solid rgba(239,68,68,0.1)" }}>
-          <div style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", letterSpacing: 1, color: "#ef4444", marginBottom: 4 }}>⚠ RISCURI CHEIE</div>
-          {analysis.key_risks.map((r, i) => (
-            <div key={i} style={{ fontFamily: "var(--mono)", fontSize: "0.58rem", color: "rgba(255,255,255,0.45)", marginBottom: 2, paddingLeft: 8, borderLeft: "1px solid rgba(239,68,68,0.2)" }}>{r}</div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Sources Panel ──
-function SourcesPanel() {
-  const tiers = [
-    { label: "TIER 1 — Surse Primare", sources: OSINT_SOURCES.filter((s) => s.tier === 1), color: "#eab308" },
-    { label: "TIER 2 — Rețea Extinsă", sources: OSINT_SOURCES.filter((s) => s.tier === 2), color: "rgba(255,255,255,0.3)" },
-  ];
-  return (
-    <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: 10 }}>
-      {tiers.map((tier) => (
-        <div key={tier.label}>
-          <div style={{ fontFamily: "var(--mono)", fontSize: "0.48rem", letterSpacing: 2, color: tier.color, marginBottom: 6 }}>{tier.label} ({tier.sources.length})</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {tier.sources.map((src) => (
-              <a key={src.handle} href={`https://x.com/${src.handle}`} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: "#06b6d4", padding: "2px 6px", background: "rgba(6,182,212,0.06)", border: "1px solid rgba(6,182,212,0.15)", borderRadius: 3, textDecoration: "none" }} title={src.focus}>
-                @{src.handle}
-              </a>
-            ))}
-          </div>
-        </div>
-      ))}
-      <div>
-        <div style={{ fontFamily: "var(--mono)", fontSize: "0.48rem", letterSpacing: 2, color: "rgba(255,255,255,0.3)", marginBottom: 6 }}>NEWS CHANNELS ({NEWS_CHANNELS.length})</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-          {NEWS_CHANNELS.map((n) => (
-            <span key={n.name} style={{ fontFamily: "var(--mono)", fontSize: "0.48rem", color: "rgba(255,255,255,0.45)", padding: "2px 6px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 3 }}>{n.name}</span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── System Log ──
-function SystemLog({ logs }) {
-  const endRef = useRef(null);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs.length]);
-  if (!logs.length) return null;
-  const typeColors = { system: "#06b6d4", success: "#22c55e", error: "#ef4444", alert: "#f97316", info: "rgba(255,255,255,0.3)" };
-  return (
-    <div style={{ padding: "6px 10px" }}>
-      <div style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", letterSpacing: 2, color: "rgba(255,255,255,0.2)", marginBottom: 4 }}>JURNAL SISTEM</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        {logs.slice(-15).map((log, i) => (
-          <div key={i} style={{ fontFamily: "var(--mono)", fontSize: "0.52rem", color: typeColors[log.type] || "rgba(255,255,255,0.2)" }}>
-            <span style={{ color: "rgba(255,255,255,0.15)" }}>[{log.time}]</span> {log.message}
-          </div>
-        ))}
-        <div ref={endRef} />
-      </div>
-    </div>
-  );
-}
-
 // ════════════════════════════════════════════════════════════
-// MAIN DASHBOARD
+// MAIN DASHBOARD — Palantir Gotham / Bloomberg Terminal Style
 // ════════════════════════════════════════════════════════════
 
 export default function LiveIntelDashboard() {
@@ -537,7 +565,7 @@ export default function LiveIntelDashboard() {
   const [logs, setLogs] = useState([]);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const [rightTab, setRightTab] = useState("feed"); // feed | analysis | maritime | webcams | sources | logs
+  const [rightTab, setRightTab] = useState("signals");
   const [activeFilter, setActiveFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("severity");
@@ -547,7 +575,6 @@ export default function LiveIntelDashboard() {
   const [mapLayer, setMapLayer] = useState("all");
 
   const managerRef = useRef(null);
-  const countdownRef = useRef(null);
 
   const allItems = useMemo(() => {
     const items = Object.entries(intel).flatMap(([agentId, agentItems]) => (agentItems || []).map((item) => ({ ...item, _agentId: agentId })));
@@ -585,8 +612,7 @@ export default function LiveIntelDashboard() {
 
   useEffect(() => {
     if (!isActive || !apiKey) return;
-    const manager = new AgentManager(
-      apiKey,
+    const manager = new AgentManager(apiKey,
       (data) => {
         setPreviousIntel((prev) => ({ ...prev, ...intel }));
         setIntel(data.intel);
@@ -600,9 +626,7 @@ export default function LiveIntelDashboard() {
           if (hasCritical) { try { new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGhdYQ==").play().catch(() => {}); } catch {} }
         }
       },
-      (progress) => {
-        setAgentStatuses((prev) => ({ ...prev, [progress.agentId]: { status: progress.status, count: progress.count || prev[progress.agentId]?.count || 0, message: progress.message } }));
-      },
+      (progress) => { setAgentStatuses((prev) => ({ ...prev, [progress.agentId]: { status: progress.status, count: progress.count || prev[progress.agentId]?.count || 0, message: progress.message } })); },
       (log) => { setLogs((prev) => [...prev.slice(-(MAX_LOG_ENTRIES - 1)), log]); }
     );
     managerRef.current = manager;
@@ -612,8 +636,8 @@ export default function LiveIntelDashboard() {
 
   useEffect(() => {
     if (!isActive) return;
-    countdownRef.current = setInterval(() => setCountdown((p) => Math.max(0, p - 1)), 1000);
-    return () => clearInterval(countdownRef.current);
+    const id = setInterval(() => setCountdown((p) => Math.max(0, p - 1)), 1000);
+    return () => clearInterval(id);
   }, [isActive]);
 
   useEffect(() => {
@@ -631,308 +655,269 @@ export default function LiveIntelDashboard() {
 
   const isLoading = Object.values(agentStatuses).some((s) => s.status === "running");
 
-  const rightPanelTabs = [
-    { id: "feed", label: "FLUX", icon: "📡" },
-    { id: "analysis", label: "ANALIZĂ", icon: "🧠" },
-    { id: "maritime", label: "MARITIM", icon: "🚢" },
-    { id: "webcams", label: "CAMERE", icon: "📹" },
-    { id: "sources", label: "SURSE", icon: "🔗" },
-    { id: "logs", label: "LOGS", icon: "💻" },
-  ];
-
-  const MAP_LAYERS = [
-    { id: "all", label: "TOATE" },
-    { id: "nuclear", label: "☢ NUCLEAR" },
-    { id: "military", label: "🎯 MILITAR" },
-    { id: "naval", label: "⚓ NAVAL" },
-    { id: "base_us", label: "🇺🇸 US BAZE" },
-    { id: "proxy", label: "🎯 PROXY" },
-    { id: "chokepoint", label: "🚢 MARITIM" },
+  const rightTabs = [
+    { id: "signals", label: "SIGNALS", icon: "📡" },
+    { id: "analysis", label: "ANALYSIS", icon: "🧠" },
+    { id: "maritime", label: "NAVAL", icon: "🚢" },
+    { id: "economic", label: "ECON", icon: "📊" },
+    { id: "satellite", label: "SAT", icon: "🛰️" },
+    { id: "webcams", label: "CAMS", icon: "📹" },
+    { id: "sources", label: "OSINT", icon: "🔗" },
+    { id: "logs", label: "SYS", icon: "💻" },
   ];
 
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", background: "#070b0f" }}>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", background: "#0B0F14" }}>
 
-      {/* ══ HEADER ══ */}
+      {/* ═══ HEADER ═══ */}
       <header style={{
-        height: 48, flexShrink: 0,
-        borderBottom: "1px solid rgba(255,255,255,0.07)",
-        padding: "0 12px",
-        display: "flex", alignItems: "center", gap: 0,
-        background: "rgba(5,8,14,0.95)", backdropFilter: "blur(20px)",
-        position: "relative", zIndex: 100,
+        height: 46, flexShrink: 0, borderBottom: "1px solid rgba(255,255,255,0.06)",
+        padding: "0 12px", display: "flex", alignItems: "center",
+        background: "rgba(18,24,33,0.95)", backdropFilter: "blur(20px)", zIndex: 100,
       }}>
         {/* Logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, paddingRight: 14, borderRight: "1px solid rgba(255,255,255,0.07)", marginRight: 12, flexShrink: 0 }}>
-          <PulsingDot color={isLoading ? "#f97316" : "#ef4444"} size={8} />
-          <span style={{ fontFamily: "var(--mono)", fontSize: "0.85rem", fontWeight: 800, letterSpacing: 3, color: "#ef4444" }}>INTEL</span>
-          <span style={{ fontFamily: "var(--mono)", fontSize: "0.85rem", fontWeight: 800, letterSpacing: 3, color: "rgba(255,255,255,0.85)" }}>LIVE</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, paddingRight: 14, borderRight: "1px solid rgba(255,255,255,0.06)", marginRight: 12, flexShrink: 0 }}>
+          <PulsingDot color={isLoading ? "#FFB020" : "#FF3B30"} size={8} />
+          <span style={{ fontFamily: "var(--display)", fontSize: "0.82rem", fontWeight: 800, letterSpacing: 2, color: "#00E5FF" }}>INTEL</span>
+          <span style={{ fontFamily: "var(--display)", fontSize: "0.82rem", fontWeight: 800, letterSpacing: 2, color: "#E5E7EB" }}>LIVE</span>
         </div>
 
-        {/* Agents row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, paddingRight: 14, borderRight: "1px solid rgba(255,255,255,0.07)", marginRight: 12, flexShrink: 0 }}>
+        {/* Agents */}
+        <div style={{ display: "flex", alignItems: "center", gap: 5, paddingRight: 14, borderRight: "1px solid rgba(255,255,255,0.06)", marginRight: 12, flexShrink: 0 }}>
           {AGENTS.map((agent) => {
-            const status = agentStatuses[agent.id] || {};
+            const st = agentStatuses[agent.id] || {};
             return (
-              <div key={agent.id} title={`${agent.fullName} — ${status.count || 0} rapoarte`}
-                style={{ display: "flex", alignItems: "center", gap: 3, cursor: "pointer", padding: "2px 5px", borderRadius: 3, transition: "background 0.15s" }}
+              <div key={agent.id} title={`${agent.fullName} — ${st.count || 0}`}
+                style={{ display: "flex", alignItems: "center", gap: 3, padding: "2px 5px", borderRadius: 3, cursor: "pointer", transition: "background 0.15s" }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                onClick={() => { setActiveFilter(agent.id); setRightTab("feed"); }}
-              >
-                <AgentStatusDot status={status.status} color={agent.color} />
-                <span style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: status.status === "running" ? agent.color : "rgba(255,255,255,0.4)", fontWeight: status.status === "running" ? 700 : 400, letterSpacing: 0.5 }}>
-                  {agent.icon} {agent.name}
+                onClick={() => { setActiveFilter(agent.id); setRightTab("signals"); }}>
+                <AgentStatusDot status={st.status} color={agent.color} />
+                <span style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", color: st.status === "running" ? agent.color : "rgba(229,231,235,0.35)", fontWeight: 600 }}>
+                  {agent.icon}
                 </span>
-                {status.count > 0 && <span style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", color: agent.color, opacity: 0.7 }}>({status.count})</span>}
               </div>
             );
           })}
         </div>
 
+        {/* Threat level mini */}
+        {analysis && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingRight: 14, borderRight: "1px solid rgba(255,255,255,0.06)", marginRight: 12 }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", letterSpacing: 1, color: "rgba(229,231,235,0.25)" }}>THREAT</span>
+            <span style={{ fontFamily: "var(--mono)", fontSize: "0.82rem", fontWeight: 800, color: analysis.threat_level >= 7 ? "#FF3B30" : "#FFB020" }}>
+              {analysis.threat_level}
+              <span style={{ fontSize: "0.48rem", color: "rgba(229,231,235,0.25)" }}>/10</span>
+            </span>
+          </div>
+        )}
+
         {/* Stats */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginRight: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: "auto" }}>
           {criticalItems > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "pulse 1s ease infinite" }} />
-              <span style={{ fontFamily: "var(--mono)", fontSize: "0.52rem", color: "#ef4444", fontWeight: 700 }}>{criticalItems} CRITICE</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, animation: "glowPulse 2s ease infinite" }}>
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#FF3B30", animation: "pulse 1s ease infinite" }} />
+              <span style={{ fontFamily: "var(--mono)", fontSize: "0.48rem", color: "#FF3B30", fontWeight: 700 }}>{criticalItems} CRITICAL</span>
             </div>
           )}
-          <span style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: "rgba(255,255,255,0.3)" }}>{totalItems} rapoarte</span>
-          {analysis && (
-            <span style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: analysis.threat_level >= 7 ? "#ef4444" : "#f97316" }}>
-              THREAT {analysis.threat_level}/10
-            </span>
-          )}
+          <span style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", color: "rgba(229,231,235,0.25)" }}>{totalItems} signals</span>
         </div>
 
         {/* Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <div style={{ textAlign: "right", marginRight: 4 }}>
-            <div style={{ fontFamily: "var(--mono)", fontSize: "0.4rem", letterSpacing: 1, color: "rgba(255,255,255,0.2)" }}>REFRESH</div>
-            <div style={{ fontFamily: "var(--mono)", fontSize: "0.75rem", fontWeight: 700, color: countdown < 15 ? "#ef4444" : "#22c55e" }}>
+            <div style={{ fontFamily: "var(--mono)", fontSize: "0.35rem", letterSpacing: 1, color: "rgba(229,231,235,0.18)" }}>NEXT CYCLE</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: "0.72rem", fontWeight: 700, color: countdown < 15 ? "#FF3B30" : "#30D158" }}>
               {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}
             </div>
           </div>
-          <button onClick={() => setSoundEnabled(!soundEnabled)} title="Sound (S)" style={{ fontSize: "0.75rem", opacity: soundEnabled ? 1 : 0.3, padding: "2px" }}>
+          <button onClick={() => setSoundEnabled(!soundEnabled)} title="Sound (S)" style={{ fontSize: "0.7rem", opacity: soundEnabled ? 1 : 0.3 }}>
             {soundEnabled ? "🔊" : "🔇"}
           </button>
           <button onClick={() => managerRef.current?.manualRefresh()} disabled={isLoading} style={{
             padding: "5px 12px", borderRadius: 5,
-            background: isLoading ? "rgba(255,255,255,0.03)" : "rgba(239,68,68,0.1)",
-            border: `1px solid ${isLoading ? "rgba(255,255,255,0.07)" : "rgba(239,68,68,0.25)"}`,
-            color: isLoading ? "rgba(255,255,255,0.3)" : "#ef4444",
-            fontFamily: "var(--mono)", fontSize: "0.58rem", fontWeight: 700, letterSpacing: 1, cursor: isLoading ? "wait" : "pointer",
+            background: isLoading ? "rgba(255,255,255,0.02)" : "rgba(0,229,255,0.08)",
+            border: `1px solid ${isLoading ? "rgba(255,255,255,0.06)" : "rgba(0,229,255,0.2)"}`,
+            color: isLoading ? "rgba(229,231,235,0.3)" : "#00E5FF",
+            fontFamily: "var(--mono)", fontSize: "0.55rem", fontWeight: 700, letterSpacing: 1, cursor: isLoading ? "wait" : "pointer",
           }}>
-            {isLoading ? "SCANARE..." : "⟳ REFRESH"}
+            {isLoading ? "SCANNING..." : "⟳ REFRESH"}
           </button>
-          {lastUpdate && (
-            <span style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", color: "rgba(255,255,255,0.2)" }}>
-              {lastUpdate.toLocaleTimeString("ro-RO")}
-            </span>
-          )}
+          {lastUpdate && <span style={{ fontFamily: "var(--mono)", fontSize: "0.4rem", color: "rgba(229,231,235,0.18)" }}>{lastUpdate.toLocaleTimeString("ro-RO")}</span>}
         </div>
       </header>
 
-      {/* ══ TICKER ══ */}
-      <LiveTicker items={breaking} />
+      {/* ═══ TICKER ═══ */}
+      <AlertTicker items={breaking} />
 
-      {/* ══ MAIN CONTENT ══ */}
+      {/* ═══ MAIN GRID ═══ */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
 
-        {/* ── MAP PANEL (left, ~63%) ── */}
-        <div style={{ flex: "0 0 63%", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-
-          {/* Map layer controls */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: 4, padding: "6px 10px",
-            background: "rgba(5,8,14,0.9)", borderBottom: "1px solid rgba(255,255,255,0.06)",
-            flexShrink: 0, overflowX: "auto",
-          }}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", letterSpacing: 2, color: "rgba(255,255,255,0.25)", marginRight: 4, flexShrink: 0 }}>LAYER</span>
-            {MAP_LAYERS.map((l) => (
-              <button key={l.id} onClick={() => setMapLayer(l.id)} style={{
-                padding: "3px 8px", borderRadius: 3, fontFamily: "var(--mono)", fontSize: "0.5rem", letterSpacing: 0.5,
-                background: mapLayer === l.id ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.02)",
-                border: `1px solid ${mapLayer === l.id ? "rgba(239,68,68,0.3)" : "rgba(255,255,255,0.06)"}`,
-                color: mapLayer === l.id ? "#ef4444" : "rgba(255,255,255,0.35)",
-                cursor: "pointer", flexShrink: 0,
-              }}>{l.label}</button>
-            ))}
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-              <span style={{ fontFamily: "var(--mono)", fontSize: "0.45rem", color: "rgba(255,255,255,0.2)" }}>
-                {allItems.length} eventi pe hartă
-              </span>
-            </div>
-          </div>
-
-          {/* Map */}
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            <ConflictMap intelItems={allItems} analysis={analysis} externalLayer={mapLayer} />
-          </div>
+        {/* ── MAP PANEL (63%) ── */}
+        <div style={{ flex: "0 0 63%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <ConflictMap intelItems={allItems} analysis={analysis} externalLayer={mapLayer} />
         </div>
 
         {/* ── RIGHT PANEL (37%) ── */}
-        <div style={{ flex: "0 0 37%", display: "flex", flexDirection: "column", overflow: "hidden", borderLeft: "1px solid rgba(255,255,255,0.07)" }}>
+        <div style={{ flex: "0 0 37%", display: "flex", flexDirection: "column", overflow: "hidden", borderLeft: "1px solid rgba(255,255,255,0.06)", background: "#0E1319" }}>
 
           {/* Right panel tabs */}
-          <div style={{
-            display: "flex", flexShrink: 0,
-            borderBottom: "1px solid rgba(255,255,255,0.07)",
-            background: "rgba(5,8,14,0.9)",
-          }}>
-            {rightPanelTabs.map((tab) => (
+          <div style={{ display: "flex", flexShrink: 0, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(18,24,33,0.8)" }}>
+            {rightTabs.map((tab) => (
               <button key={tab.id} onClick={() => setRightTab(tab.id)} style={{
-                flex: 1, padding: "9px 4px",
-                fontFamily: "var(--mono)", fontSize: "0.48rem", fontWeight: 600, letterSpacing: 0.5,
-                background: rightTab === tab.id ? "rgba(255,255,255,0.04)" : "transparent",
-                color: rightTab === tab.id ? "#e2e8f0" : "rgba(255,255,255,0.3)",
-                borderBottom: rightTab === tab.id ? "2px solid #ef4444" : "2px solid transparent",
+                flex: 1, padding: "8px 2px",
+                fontFamily: "var(--mono)", fontSize: "0.42rem", fontWeight: 600, letterSpacing: 0.5,
+                background: rightTab === tab.id ? "rgba(0,229,255,0.04)" : "transparent",
+                color: rightTab === tab.id ? "#00E5FF" : "rgba(229,231,235,0.25)",
+                borderBottom: rightTab === tab.id ? "2px solid #00E5FF" : "2px solid transparent",
                 cursor: "pointer", transition: "all 0.15s",
               }}>
-                <span style={{ display: "block", fontSize: "0.7rem", marginBottom: 1 }}>{tab.icon}</span>
+                <span style={{ display: "block", fontSize: "0.65rem", marginBottom: 1 }}>{tab.icon}</span>
                 {tab.label}
               </button>
             ))}
           </div>
 
-          {/* ── FEED TAB ── */}
-          {rightTab === "feed" && (
+          {/* ── SIGNALS TAB ── */}
+          {rightTab === "signals" && (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-              {/* Feed controls */}
-              <div style={{ padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.05)", flexShrink: 0, display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
-                <input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Caută..."
-                  style={{ flex: "1 1 120px", padding: "4px 8px", borderRadius: 4, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", color: "#fff", fontFamily: "var(--mono)", fontSize: "0.62rem", outline: "none", minWidth: 80 }}
-                  onFocus={(e) => (e.target.style.borderColor = "rgba(239,68,68,0.3)")}
-                  onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.07)")}
-                />
+              {/* Controls */}
+              <div style={{ padding: "6px 8px", borderBottom: "1px solid rgba(255,255,255,0.04)", flexShrink: 0, display: "flex", gap: 4, alignItems: "center" }}>
+                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search signals..."
+                  style={{ flex: 1, padding: "4px 8px", borderRadius: 4, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", color: "#fff", fontFamily: "var(--mono)", fontSize: "0.58rem", outline: "none", minWidth: 60 }}
+                  onFocus={(e) => (e.target.style.borderColor = "rgba(0,229,255,0.3)")}
+                  onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.06)")} />
                 <button onClick={() => setSortBy(sortBy === "severity" ? "time" : "severity")} style={{
-                  padding: "3px 7px", borderRadius: 3, fontFamily: "var(--mono)", fontSize: "0.48rem",
-                  background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.4)", cursor: "pointer",
-                }}>
-                  {sortBy === "severity" ? "↓ SEV" : "↓ TIMP"}
-                </button>
-                <button onClick={() => { setActiveFilter("ALL"); setSearchQuery(""); }} style={{
-                  padding: "3px 7px", borderRadius: 3, fontFamily: "var(--mono)", fontSize: "0.48rem",
-                  background: activeFilter === "ALL" && !searchQuery ? "rgba(239,68,68,0.1)" : "rgba(255,255,255,0.03)",
-                  border: `1px solid ${activeFilter === "ALL" && !searchQuery ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.07)"}`,
-                  color: activeFilter === "ALL" && !searchQuery ? "#ef4444" : "rgba(255,255,255,0.4)", cursor: "pointer",
-                }}>TOATE ({totalItems})</button>
+                  padding: "3px 6px", borderRadius: 3, fontFamily: "var(--mono)", fontSize: "0.42rem",
+                  background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", color: "rgba(229,231,235,0.35)", cursor: "pointer",
+                }}>{sortBy === "severity" ? "↓SEV" : "↓TIME"}</button>
               </div>
-              {/* Agent filter pills */}
-              <div style={{ padding: "4px 8px", borderBottom: "1px solid rgba(255,255,255,0.05)", flexShrink: 0, display: "flex", gap: 3, flexWrap: "wrap" }}>
-                {AGENTS.map((agent) => {
-                  const count = (intel[agent.id] || []).length;
-                  if (!count) return null;
+              {/* Agent pills */}
+              <div style={{ padding: "4px 8px", borderBottom: "1px solid rgba(255,255,255,0.04)", flexShrink: 0, display: "flex", gap: 3, overflowX: "auto" }}>
+                <button onClick={() => setActiveFilter("ALL")} style={{
+                  padding: "2px 6px", borderRadius: 8, fontFamily: "var(--mono)", fontSize: "0.42rem",
+                  background: activeFilter === "ALL" ? "rgba(0,229,255,0.1)" : "rgba(255,255,255,0.02)",
+                  border: `1px solid ${activeFilter === "ALL" ? "rgba(0,229,255,0.25)" : "rgba(255,255,255,0.05)"}`,
+                  color: activeFilter === "ALL" ? "#00E5FF" : "rgba(229,231,235,0.3)", cursor: "pointer", flexShrink: 0,
+                }}>ALL {totalItems}</button>
+                {AGENTS.map((a) => {
+                  const c = (intel[a.id] || []).length;
+                  if (!c) return null;
                   return (
-                    <button key={agent.id} onClick={() => setActiveFilter(agent.id)} style={{
-                      padding: "2px 7px", borderRadius: 10, fontFamily: "var(--mono)", fontSize: "0.45rem",
-                      background: activeFilter === agent.id ? `${agent.color}18` : "rgba(255,255,255,0.02)",
-                      border: `1px solid ${activeFilter === agent.id ? `${agent.color}44` : "rgba(255,255,255,0.06)"}`,
-                      color: activeFilter === agent.id ? agent.color : "rgba(255,255,255,0.3)", cursor: "pointer",
-                    }}>{agent.icon} {agent.name} {count}</button>
+                    <button key={a.id} onClick={() => setActiveFilter(a.id)} style={{
+                      padding: "2px 6px", borderRadius: 8, fontFamily: "var(--mono)", fontSize: "0.42rem",
+                      background: activeFilter === a.id ? `${a.color}15` : "rgba(255,255,255,0.02)",
+                      border: `1px solid ${activeFilter === a.id ? `${a.color}44` : "rgba(255,255,255,0.05)"}`,
+                      color: activeFilter === a.id ? a.color : "rgba(229,231,235,0.3)", cursor: "pointer", flexShrink: 0,
+                    }}>{a.icon} {c}</button>
                   );
                 })}
               </div>
-              {/* Feed items */}
-              <div style={{ flex: 1, overflowY: "auto" }}>
-                {allItems.length > 0 ? (
-                  allItems.map((item, i) => (
-                    <CompactIntelCard key={`${item.headline}-${i}`} item={item} agentDef={AGENTS.find((a) => a.id === item._agentId)} onVerify={handleVerify} isNew={isNewItem(item)} />
-                  ))
-                ) : (
+              {/* Signal feed */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
+                {allItems.length > 0 ? allItems.map((item, i) => (
+                  <SignalCard key={`${item.headline}-${i}`} item={item} agentDef={AGENTS.find((a) => a.id === item._agentId)} onVerify={handleVerify} isNew={isNewItem(item)} />
+                )) : (
                   <div style={{ textAlign: "center", padding: "40px 20px" }}>
-                    <div style={{ fontSize: "1.5rem", animation: "pulse 1.5s ease infinite", marginBottom: 10 }}>📡</div>
-                    <div style={{ fontFamily: "var(--mono)", fontSize: "0.6rem", color: "rgba(255,255,255,0.2)", letterSpacing: 2 }}>
-                      {isLoading ? "SCANARE SURSE..." : "AȘTEPTARE DATE..."}
+                    <div style={{ fontSize: "1.4rem", animation: "pulse 1.5s ease infinite", marginBottom: 10 }}>📡</div>
+                    <div style={{ fontFamily: "var(--mono)", fontSize: "0.55rem", color: "rgba(229,231,235,0.2)", letterSpacing: 2 }}>
+                      {isLoading ? "SCANNING INTELLIGENCE SOURCES..." : "AWAITING DATA..."}
                     </div>
-                    <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginTop: 12 }}>
+                    <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginTop: 12 }}>
                       {AGENTS.filter((a) => agentStatuses[a.id]?.status === "running").map((a) => (
-                        <span key={a.id} style={{ fontFamily: "var(--mono)", fontSize: "0.5rem", color: a.color, animation: "pulse 1.5s ease infinite" }}>{a.icon} {a.name}</span>
+                        <span key={a.id} style={{ fontFamily: "var(--mono)", fontSize: "0.48rem", color: a.color, animation: "pulse 1.5s ease infinite" }}>{a.icon} {a.name}</span>
                       ))}
                     </div>
                   </div>
                 )}
               </div>
-              {/* Analysis mini */}
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", flexShrink: 0, maxHeight: 200, overflowY: "auto" }}>
-                <AnalysisSummaryPanel analysis={analysis} />
+              {/* Risk gauges + Analysis mini */}
+              <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", flexShrink: 0, background: "#121821" }}>
+                {analysis && (
+                  <div style={{ display: "flex", justifyContent: "center", padding: "6px 10px", gap: 4, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <RiskGauge value={analysis.threat_level || 0} max={10} label="THREAT" size={85} />
+                    {analysis.escalation_probability != null && <RiskGauge value={Math.round(analysis.escalation_probability / 10)} max={10} label="ESCALATION" size={85} />}
+                    {analysis.nuclear_risk != null && <RiskGauge value={Math.round(analysis.nuclear_risk / 10)} max={10} label="NUCLEAR" size={85} />}
+                  </div>
+                )}
+                <div style={{ maxHeight: 150, overflowY: "auto" }}>
+                  <AnalysisWidget analysis={analysis} />
+                </div>
               </div>
             </div>
           )}
 
           {/* ── ANALYSIS TAB ── */}
           {rightTab === "analysis" && (
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              <FullAnalysisPanel analysis={analysis} />
+            <div style={{ flex: 1, overflowY: "auto", background: "#121821" }}>
+              {analysis && (
+                <div style={{ display: "flex", justifyContent: "center", padding: "12px", gap: 8, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <RiskGauge value={analysis.threat_level || 0} max={10} label="THREAT LEVEL" size={110} />
+                  {analysis.escalation_probability != null && <RiskGauge value={Math.round(analysis.escalation_probability / 10)} max={10} label="ESCALATION" size={110} />}
+                  {analysis.nuclear_risk != null && <RiskGauge value={Math.round(analysis.nuclear_risk / 10)} max={10} label="NUCLEAR RISK" size={110} />}
+                </div>
+              )}
+              <AnalysisWidget analysis={analysis} />
             </div>
           )}
 
           {/* ── MARITIME TAB ── */}
-          {rightTab === "maritime" && (
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              <MaritimePanel />
-            </div>
-          )}
+          {rightTab === "maritime" && <div style={{ flex: 1, overflowY: "auto" }}><MaritimePanel /></div>}
+
+          {/* ── ECONOMIC TAB ── */}
+          {rightTab === "economic" && <div style={{ flex: 1, overflowY: "auto", background: "#121821" }}><EconomicWidget analysis={analysis} /></div>}
+
+          {/* ── SATELLITE TAB ── */}
+          {rightTab === "satellite" && <div style={{ flex: 1, overflowY: "auto", background: "#121821" }}><SatelliteWidget /></div>}
 
           {/* ── WEBCAMS TAB ── */}
-          {rightTab === "webcams" && (
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              <WebcamViewer />
-            </div>
-          )}
+          {rightTab === "webcams" && <div style={{ flex: 1, overflowY: "auto" }}><WebcamViewer /></div>}
 
           {/* ── SOURCES TAB ── */}
-          {rightTab === "sources" && (
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              <SourcesPanel />
-            </div>
-          )}
+          {rightTab === "sources" && <div style={{ flex: 1, overflowY: "auto", background: "#121821" }}><SourcesWidget /></div>}
 
           {/* ── LOGS TAB ── */}
-          {rightTab === "logs" && (
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              <SystemLog logs={logs} />
-            </div>
-          )}
+          {rightTab === "logs" && <div style={{ flex: 1, overflowY: "auto", background: "#121821" }}><SystemLog logs={logs} /></div>}
         </div>
       </div>
 
-      {/* ══ BOTTOM STRIP ══ */}
+      {/* ═══ BOTTOM STRIP ═══ */}
       <div style={{
-        height: 72, flexShrink: 0,
-        borderTop: "1px solid rgba(255,255,255,0.07)",
-        display: "flex", overflow: "hidden",
-        background: "rgba(5,8,14,0.95)",
+        height: 68, flexShrink: 0, borderTop: "1px solid rgba(255,255,255,0.06)",
+        display: "flex", overflow: "hidden", background: "rgba(18,24,33,0.95)",
       }}>
-        {/* Maritime */}
-        <div style={{ flex: "0 0 auto", borderRight: "1px solid rgba(255,255,255,0.07)", overflow: "hidden" }}>
-          <MaritimeBar />
+        {/* Maritime mini */}
+        <div style={{ flex: "0 0 auto", borderRight: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", padding: "0 10px", gap: 10 }}>
+          <span style={{ fontFamily: "var(--mono)", fontSize: "0.38rem", letterSpacing: 2, color: "rgba(229,231,235,0.2)" }}>MARITIME</span>
+          {[
+            { n: "HORMUZ", c: "#FF3B30" }, { n: "BAB-M", c: "#FFB020" }, { n: "SUEZ", c: "#FFD60A" }, { n: "MALACCA", c: "#30D158" },
+          ].map((s) => (
+            <div key={s.n} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: s.c, boxShadow: s.c === "#FF3B30" ? `0 0 4px ${s.c}` : "none" }} />
+              <span style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", fontWeight: 700, color: s.c }}>{s.n}</span>
+            </div>
+          ))}
         </div>
+
         {/* Webcam strip */}
         <div style={{ flex: 1, overflow: "hidden" }}>
-          <WebcamStrip onOpenCams={() => setRightTab("webcams")} />
+          <WebcamBottomStrip onOpenCams={() => setRightTab("webcams")} />
         </div>
+
         {/* Stats */}
-        <div style={{ flex: "0 0 auto", borderLeft: "1px solid rgba(255,255,255,0.07)", padding: "8px 12px", display: "flex", flexDirection: "column", justifyContent: "center", gap: 3 }}>
-          <div style={{ display: "flex", gap: 10 }}>
-            {[
-              { label: "RAPOARTE", value: totalItems, color: "#06b6d4" },
-              { label: "CRITICE", value: criticalItems, color: "#ef4444" },
-              { label: "CICLURI", value: totalCycles, color: "#22c55e" },
-            ].map((s) => (
-              <div key={s.label} style={{ textAlign: "center" }}>
-                <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", letterSpacing: 1, color: "rgba(255,255,255,0.25)" }}>{s.label}</div>
-                <div style={{ fontFamily: "var(--mono)", fontSize: "0.85rem", fontWeight: 700, color: s.color }}>{s.value}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ fontFamily: "var(--mono)", fontSize: "0.42rem", color: "rgba(255,255,255,0.15)", textAlign: "center" }}>
-            {isLoading ? <span style={{ color: "#f97316" }}>● SCANARE</span> : <span style={{ color: "#22c55e" }}>● ACTIV</span>}
-            {" "}· R=Refresh · S=Sunet
+        <div style={{ flex: "0 0 auto", borderLeft: "1px solid rgba(255,255,255,0.06)", padding: "6px 12px", display: "flex", gap: 10, alignItems: "center" }}>
+          {[
+            { label: "SIGNALS", value: totalItems, color: "#00E5FF" },
+            { label: "CRITICAL", value: criticalItems, color: "#FF3B30" },
+            { label: "CYCLES", value: totalCycles, color: "#30D158" },
+          ].map((s) => (
+            <div key={s.label} style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "0.35rem", letterSpacing: 1, color: "rgba(229,231,235,0.2)" }}>{s.label}</div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "0.78rem", fontWeight: 800, color: s.color }}>{s.value}</div>
+            </div>
+          ))}
+          <div style={{ fontFamily: "var(--mono)", fontSize: "0.38rem", color: "rgba(229,231,235,0.12)" }}>
+            {isLoading ? <span style={{ color: "#FFB020" }}>● SCAN</span> : <span style={{ color: "#30D158" }}>● LIVE</span>}
           </div>
         </div>
       </div>
