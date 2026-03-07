@@ -217,7 +217,9 @@ export default async function handler(req, res) {
 
     // Collect all available API keys
     const userKey = req.headers["x-api-key"];
-    const openrouterKey = userKey || process.env.OPENROUTER_API_KEY;
+    // Ignore placeholder "server-side" key from frontend
+    const realUserKey = userKey && userKey !== "server-side" ? userKey : null;
+    const openrouterKey = realUserKey || process.env.OPENROUTER_API_KEY;
     const groqKey = process.env.GROQ_API_KEY;
     const cerebrasKey = process.env.CEREBRAS_API_KEY;
     const mistralKey = process.env.MISTRAL_API_KEY;
