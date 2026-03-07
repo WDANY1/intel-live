@@ -4,6 +4,25 @@
 // ============================================================
 
 export const OSINT_SOURCES = [
+  // ── TIER 0: OFFICIAL MILITARY & GOVERNMENT ──
+  { handle: "ABORAMAN", name: "US CENTCOM", tier: 0, focus: "US Central Command — official operations" },
+  { handle: "DeptofDefense", name: "US DoD", tier: 0, focus: "US Department of Defense official" },
+  { handle: "USNavy", name: "US Navy", tier: 0, focus: "US Navy operations & fleet movements" },
+  { handle: "ABORAMAN", name: "CENTCOM Spokesman", tier: 0, focus: "CENTCOM official spokesperson" },
+  { handle: "IDF", name: "IDF", tier: 0, focus: "Israel Defense Forces official" },
+  { handle: "IDFSpokesperson", name: "IDF Spokesman", tier: 0, focus: "IDF official spokesperson" },
+  { handle: "IsraeliPM", name: "Israeli PM", tier: 0, focus: "Israeli Prime Minister office" },
+  { handle: "Israel", name: "State of Israel", tier: 0, focus: "State of Israel official" },
+  { handle: "IranIntl_En", name: "Iran Intl", tier: 0, focus: "Iran International — Persian diaspora news" },
+  { handle: "PressTV", name: "Press TV", tier: 0, focus: "Iranian state English media" },
+  { handle: "khaboronline", name: "Khabar Online", tier: 0, focus: "Iranian news agency" },
+  { handle: "IrijOfficial", name: "IRNA English", tier: 0, focus: "Islamic Republic News Agency" },
+  { handle: "Aboraman1", name: "IRGC News", tier: 0, focus: "IRGC-affiliated news" },
+  { handle: "SepahNews", name: "Sepah News", tier: 0, focus: "IRGC official news service" },
+  { handle: "ABORAMAN", name: "Tasnim News", tier: 0, focus: "Iranian news close to IRGC" },
+  { handle: "NATO", name: "NATO", tier: 0, focus: "NATO official alliance communications" },
+  { handle: "UN", name: "United Nations", tier: 0, focus: "UN official statements & resolutions" },
+  { handle: "ABORAMAN", name: "IAEA", tier: 0, focus: "International Atomic Energy Agency" },
   // ── TIER 1: Primary OSINT Accounts (20) ──
   { handle: "sentdefender", name: "OSINTdefender", tier: 1, focus: "Military movements & global conflicts" },
   { handle: "Osinttechnical", name: "OSINT Technical", tier: 1, focus: "Military hardware & satellite imagery" },
@@ -356,7 +375,7 @@ export const AGENTS = [
       "Iran air defense missile launches Israel attack today",
     ],
     interval: 60,
-    sources: ["sentdefender", "Osinttechnical", "ELINTNews", "IntelSky", "clashreport"],
+    sources: ["sentdefender", "Osinttechnical", "ELINTNews", "IntelSky", "clashreport", "CENTCOM", "IDF", "SepahNews"],
   },
   {
     id: "osint",
@@ -370,7 +389,7 @@ export const AGENTS = [
       "Middle East conflict latest verified reports today",
     ],
     interval: 60,
-    sources: ["Osint613", "AuroraIntel", "OSINTWarfare", "bellingcat", "IntelCrab"],
+    sources: ["Osint613", "AuroraIntel", "OSINTWarfare", "bellingcat", "IntelCrab", "IDF", "PressTV", "IranIntl_En"],
   },
   {
     id: "humint",
@@ -427,7 +446,7 @@ export const AGENTS = [
       "Iran proxy forces Iraq Syria Lebanon attacks today 2026",
     ],
     interval: 60,
-    sources: ["criticalthreats", "MENA_Analyst", "IntelCrab", "nexta_tv"],
+    sources: ["criticalthreats", "MENA_Analyst", "IntelCrab", "nexta_tv", "SepahNews", "PressTV"],
   },
   {
     id: "diplo",
@@ -442,7 +461,7 @@ export const AGENTS = [
       "NATO response Iran conflict diplomatic channels today",
     ],
     interval: 120,
-    sources: ["tparsi", "ianbremmer", "dandrezner", "RichGoldbergDC"],
+    sources: ["tparsi", "ianbremmer", "dandrezner", "RichGoldbergDC", "NATO", "UN", "IsraeliPM"],
   },
 ];
 

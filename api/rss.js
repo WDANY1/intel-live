@@ -2,20 +2,37 @@
 // Fetches and parses RSS/Atom feeds, returns JSON articles
 
 const RSS_FEEDS = {
+  // Wire Services
   aljazeera: "https://www.aljazeera.com/xml/rss/all.xml",
+  aljazeera_me: "https://www.aljazeera.com/xml/rss/all.xml",
   bbc_world: "http://feeds.bbci.co.uk/news/world/rss.xml",
   bbc_me: "http://feeds.bbci.co.uk/news/world/middle_east/rss.xml",
   reuters_world: "https://www.reutersagency.com/feed/?best-topics=world",
+  ap_top: "https://rsshub.app/apnews/topics/apf-topnews",
   cnn_world: "http://rss.cnn.com/rss/edition_world.rss",
   guardian_world: "https://www.theguardian.com/world/rss",
   france24: "https://www.france24.com/en/rss",
   dw_world: "https://rss.dw.com/rdf/rss-en-world",
+  // Middle East Specialist
   middleeasteye: "https://www.middleeasteye.net/rss",
-  defense_one: "https://www.defenseone.com/rss/",
-  war_zone: "https://www.thedrive.com/the-war-zone/feed",
   times_israel: "https://www.timesofisrael.com/feed/",
   jpost: "https://www.jpost.com/rss/rssfeedsfrontpage.aspx",
   iran_intl: "https://www.iranintl.com/en/feed",
+  al_monitor: "https://www.al-monitor.com/rss",
+  alarabiya: "https://english.alarabiya.net/tools/rss",
+  // Iranian State Media (for balance)
+  presstv: "https://www.presstv.ir/rss",
+  // Defense & Military
+  defense_one: "https://www.defenseone.com/rss/",
+  war_zone: "https://www.thedrive.com/the-war-zone/feed",
+  breaking_defense: "https://breakingdefense.com/feed/",
+  military_times: "https://www.militarytimes.com/arc/outboundfeeds/rss/category/news/?outputType=xml",
+  naval_news: "https://www.navalnews.com/feed/",
+  // International
+  sky_news: "https://feeds.skynews.com/feeds/rss/world.xml",
+  euronews: "https://www.euronews.com/rss",
+  nyt_world: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+  wapo: "https://feeds.washingtonpost.com/rss/world",
 };
 
 // Simple XML tag content extractor

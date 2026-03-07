@@ -75,10 +75,11 @@ async function runAgentQuery(apiKey, agent) {
     year: "numeric",
   });
 
-  const prompt = `You are an intelligence analyst. Report on the very latest developments about: "${allQueries}".
+  const prompt = `You are an intelligence analyst monitoring the Iran-Israel-US conflict. Report on the very latest developments about: "${allQueries}".
 Today is ${today}. Focus ONLY on the most recent events from the last 24-48 hours.
-Key OSINT accounts to reference: ${sourceMentions}
-Key news outlets to reference: ${NEWS_SOURCES.slice(0, 12).join(", ")}
+IMPORTANT: Include information from BOTH sides — Western/Israeli sources AND Iranian/regional sources. Cross-reference claims. Note when info comes from only one side.
+Key OSINT accounts: ${sourceMentions}
+Key news outlets: ${NEWS_SOURCES.slice(0, 16).join(", ")}
 
 Return ONLY a valid JSON array of exactly ${ITEMS_PER_AGENT_QUERY} intelligence items about real, verified events.
 Each item: {"headline":"<concise title>","summary":"<2-3 detailed sentences about what happened>","source":"<news outlet or OSINT account>","time":"<e.g. 3 hours ago>","severity":<1-5>,"verified":<true or false>,"location":"<city/country>"}
