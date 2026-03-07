@@ -97,13 +97,13 @@ function GlobeFallback({ error }) {
 }
 
 function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
-  const containerRef = useRef(null);
+  const wrapperRef = useRef(null);
+  const globeMountRef = useRef(null); // separate div for globe.gl (not managed by React)
   const globeRef = useRef(null);
   const [ready, setReady] = useState(false);
 
-  // Process intel items into globe points
   const eventPoints = useCallback(() => {
-    return intelItems.map((item, i) => {
+    return intelItems.map((item) => {
       const coords = extractCoords(item);
       if (!coords) return null;
       const type = detectEventType([item.headline, item.summary].join(" "));
@@ -119,26 +119,30 @@ function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
     }).filter(Boolean);
   }, [intelItems]);
 
-  // Generate arcs between related points (e.g., Iran->Israel, Yemen->Red Sea)
-  const arcsData = useCallback(() => {
-    const arcs = [
-      { startLat: 35.69, startLng: 51.39, endLat: 31.77, endLng: 35.21, color: ["#FF3B3066", "#FF3B3066"], label: "Iran → Israel" },
-      { startLat: 15.37, startLng: 44.19, endLat: 12.58, endLng: 43.15, color: ["#FB923C66", "#FB923C66"], label: "Houthis → Bab el-Mandeb" },
-      { startLat: 33.89, startLng: 35.50, endLat: 31.77, endLng: 35.21, color: ["#FB923C66", "#FB923C66"], label: "Hezbollah → Israel" },
-      { startLat: 25.41, startLng: 51.23, endLat: 26.57, endLng: 56.25, color: ["#3B82F666", "#3B82F666"], label: "Al Udeid → Hormuz" },
-    ];
-    return arcs;
-  }, []);
+  const arcsData = useCallback(() => [
+    { startLat: 35.69, startLng: 51.39, endLat: 31.77, endLng: 35.21, color: ["#FF3B3066", "#FF3B3066"], label: "Iran → Israel" },
+    { startLat: 15.37, startLng: 44.19, endLat: 12.58, endLng: 43.15, color: ["#FB923C66", "#FB923C66"], label: "Houthis → Bab el-Mandeb" },
+    { startLat: 33.89, startLng: 35.50, endLat: 31.77, endLng: 35.21, color: ["#FB923C66", "#FB923C66"], label: "Hezbollah → Israel" },
+    { startLat: 25.41, startLng: 51.23, endLat: 26.57, endLng: 56.25, color: ["#3B82F666", "#3B82F666"], label: "Al Udeid → Hormuz" },
+  ], []);
 
   useEffect(() => {
-    if (!containerRef.current || globeRef.current) return;
+    if (!wrapperRef.current || globeRef.current) return;
+
+    // Create a separate mount point outside React's DOM management
+    const mountDiv = document.createElement("div");
+    mountDiv.style.cssText = "width:100%;height:100%;position:absolute;inset:0;";
+    wrapperRef.current.appendChild(mountDiv);
+    globeMountRef.current = mountDiv;
 
     let cancelled = false;
     let resizeHandler = null;
-    const container = containerRef.current;
 
     import("globe.gl").then((GlobeModule) => {
-      if (cancelled || !container) return;
+      if (cancelled) {
+        mountDiv.remove();
+        return;
+      }
 
       const Globe = GlobeModule.default;
 
@@ -149,21 +153,18 @@ function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
         .showAtmosphere(true)
         .atmosphereColor("#00E5FF")
         .atmosphereAltitude(0.15)
-        .width(container.clientWidth)
-        .height(container.clientHeight)
+        .width(mountDiv.clientWidth)
+        .height(mountDiv.clientHeight)
         .pointOfView({ lat: 28, lng: 48, altitude: 2.2 }, 0)
-        // Base points (strategic locations)
         .customLayerData(BASES)
         .customThreeObject((d) => {
           const group = new THREE.Group();
           const ringGeo = new THREE.RingGeometry(d.size * 0.8, d.size, 32);
           const ringMat = new THREE.MeshBasicMaterial({ color: d.color, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
-          const ring = new THREE.Mesh(ringGeo, ringMat);
-          group.add(ring);
+          group.add(new THREE.Mesh(ringGeo, ringMat));
           const dotGeo = new THREE.CircleGeometry(d.size * 0.3, 16);
           const dotMat = new THREE.MeshBasicMaterial({ color: d.color, side: THREE.DoubleSide });
-          const dot = new THREE.Mesh(dotGeo, dotMat);
-          group.add(dot);
+          group.add(new THREE.Mesh(dotGeo, dotMat));
           return group;
         })
         .customThreeObjectUpdate((obj, d) => {
@@ -171,7 +172,6 @@ function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
           obj.lookAt(0, 0, 0);
           obj.rotateZ(Math.PI);
         })
-        // Arcs
         .arcsData(arcsData())
         .arcColor("color")
         .arcDashLength(0.4)
@@ -179,7 +179,6 @@ function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
         .arcDashAnimateTime(2000)
         .arcStroke(0.5)
         .arcAltitudeAutoScale(0.3)
-        // HTML labels for event points
         .htmlElementsData([])
         .htmlElement((d) => {
           const el = document.createElement("div");
@@ -200,7 +199,7 @@ function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
           return el;
         })
         .htmlAltitude((d) => d.altitude || 0.01)
-        (container);
+        (mountDiv);
 
       globeRef.current = globe;
 
@@ -210,17 +209,15 @@ function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
       globe.controls().dampingFactor = 0.1;
 
       resizeHandler = () => {
-        if (container && globeRef.current) {
-          globe.width(container.clientWidth);
-          globe.height(container.clientHeight);
+        if (mountDiv.parentNode && globeRef.current) {
+          globe.width(mountDiv.clientWidth);
+          globe.height(mountDiv.clientHeight);
         }
       };
       window.addEventListener("resize", resizeHandler);
 
       setReady(true);
-    }).catch(() => {
-      // globe.gl failed to load — fallback will show via error boundary
-    });
+    }).catch(() => {});
 
     return () => {
       cancelled = true;
@@ -229,21 +226,17 @@ function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
         try { globeRef.current._destructor?.(); } catch {}
         globeRef.current = null;
       }
-      // Safe cleanup: remove all children globe.gl added to the container
-      while (container && container.firstChild) {
-        try { container.removeChild(container.firstChild); } catch { break; }
-      }
+      // Remove the entire mount div (bypasses React DOM reconciliation)
+      try { mountDiv.remove(); } catch {}
+      globeMountRef.current = null;
     };
   }, []);
 
-  // Update event points when intel changes
   useEffect(() => {
     if (!globeRef.current || !ready) return;
-    const points = eventPoints();
-    globeRef.current.htmlElementsData(points);
+    globeRef.current.htmlElementsData(eventPoints());
   }, [intelItems, ready, eventPoints]);
 
-  // Focus on selected event
   useEffect(() => {
     if (!globeRef.current || !selectedEvent) return;
     const coords = extractCoords(selectedEvent);
@@ -254,7 +247,7 @@ function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
   }, [selectedEvent]);
 
   return (
-    <div ref={containerRef} style={{
+    <div ref={wrapperRef} style={{
       width: "100%", height: "100%", position: "relative",
       background: "radial-gradient(ellipse at center, #0a1628 0%, #060A0F 70%)",
     }}>
