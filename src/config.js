@@ -492,71 +492,100 @@ export const WEBCAM_REGIONS = [
   { id: "levant", label: "LEVANT", color: "#e040fb", flag: "🗺️" },
 ];
 
-// ── AI Models — Top 5 Free Models on OpenRouter (March 2026) ──
+// ── AI Models — Top 8 Free Models (March 2026) ──
+// Providers: OpenRouter (free), Groq (free), Cerebras (free), Mistral (free Experiment)
+// All accessible without credit card
 export const AI_MODELS = [
   {
-    id: "google/gemma-3-27b-it:free",
-    name: "Gemma 3 27B",
-    provider: "Google",
-    color: "#4285f4",
-    icon: "🔵",
-    strength: "Reliable instruction-following & large context",
+    id: "meta-llama/llama-4-maverick:free",
+    name: "Llama 4 Maverick",
+    provider: "Meta (OpenRouter)",
+    color: "#1877F2",
+    icon: "🦙",
+    strength: "Latest Meta model — strongest free model for tool-calling & analysis",
+    contextWindow: 131072,
+  },
+  {
+    id: "deepseek/deepseek-r1:free",
+    name: "DeepSeek R1",
+    provider: "DeepSeek (OpenRouter)",
+    color: "#00d4aa",
+    icon: "🧠",
+    strength: "Top-tier reasoning — chain-of-thought for complex intel analysis",
     contextWindow: 131072,
   },
   {
     id: "deepseek/deepseek-chat-v3-0324:free",
     name: "DeepSeek V3",
-    provider: "DeepSeek",
-    color: "#00d4aa",
+    provider: "DeepSeek (OpenRouter)",
+    color: "#00b894",
     icon: "🟢",
     strength: "Strong analysis & multilingual reasoning",
     contextWindow: 131072,
   },
   {
+    id: "google/gemma-3-27b-it:free",
+    name: "Gemma 3 27B",
+    provider: "Google (OpenRouter)",
+    color: "#4285f4",
+    icon: "🔵",
+    strength: "Reliable instruction-following & structured JSON output",
+    contextWindow: 131072,
+  },
+  {
     id: "qwen/qwq-32b:free",
     name: "QwQ 32B",
-    provider: "Alibaba",
+    provider: "Alibaba (OpenRouter)",
     color: "#ff6a00",
     icon: "🟠",
     strength: "Advanced reasoning & complex analysis",
     contextWindow: 131072,
   },
   {
+    id: "nvidia/llama-3.1-nemotron-ultra-253b:free",
+    name: "Nemotron Ultra 253B",
+    provider: "NVIDIA (OpenRouter)",
+    color: "#76B900",
+    icon: "💚",
+    strength: "253B parameters — largest free model, deep analysis capability",
+    contextWindow: 131072,
+  },
+  {
     id: "mistralai/mistral-small-3.1-24b-instruct:free",
     name: "Mistral Small 3.1",
-    provider: "Mistral",
+    provider: "Mistral (OpenRouter)",
     color: "#ff4500",
     icon: "🔴",
     strength: "Fast structured output & JSON generation",
     contextWindow: 131072,
   },
   {
-    id: "deepseek/deepseek-r1-zero:free",
-    name: "DeepSeek R1 Zero",
-    provider: "DeepSeek",
-    color: "#00b894",
-    icon: "🟩",
-    strength: "Top-tier reasoning & deep analysis",
+    id: "meta-llama/llama-4-scout:free",
+    name: "Llama 4 Scout",
+    provider: "Meta (OpenRouter)",
+    color: "#5B7FFF",
+    icon: "🔭",
+    strength: "Fast scouting & initial intelligence gathering",
     contextWindow: 131072,
   },
 ];
 
-// Map agents to primary models (round-robin + best fit)
+// Map agents to primary models (best fit for each task)
 export const AGENT_MODEL_MAP = {
-  sigint: "google/gemma-3-27b-it:free",                    // Reliable for military intel
-  osint: "deepseek/deepseek-chat-v3-0324:free",            // Strong analysis
-  humint: "qwen/qwq-32b:free",                             // Advanced reasoning for ground reports
-  geoint: "mistralai/mistral-small-3.1-24b-instruct:free", // Fast structured data
-  econint: "deepseek/deepseek-r1-zero:free",                // Deep reasoning for economic analysis
-  proxy: "google/gemma-3-27b-it:free",                     // Reliable for proxy monitoring
-  diplo: "deepseek/deepseek-chat-v3-0324:free",            // Strong analysis for diplomacy
+  sigint: "meta-llama/llama-4-maverick:free",               // Strongest free model for military intel
+  osint: "deepseek/deepseek-chat-v3-0324:free",             // Strong analysis
+  humint: "deepseek/deepseek-r1:free",                      // Deep reasoning for ground reports
+  geoint: "mistralai/mistral-small-3.1-24b-instruct:free",  // Fast structured data
+  econint: "nvidia/llama-3.1-nemotron-ultra-253b:free",     // Largest model for complex economic analysis
+  proxy: "qwen/qwq-32b:free",                               // Advanced reasoning for proxy monitoring
+  diplo: "google/gemma-3-27b-it:free",                      // Reliable for diplomacy
 };
 
-// Models used for cross-verification (query 3 different models)
+// Models used for cross-verification (query 3 different providers)
 export const VERIFICATION_MODELS = [
+  "meta-llama/llama-4-maverick:free",
+  "deepseek/deepseek-r1:free",
   "google/gemma-3-27b-it:free",
-  "deepseek/deepseek-chat-v3-0324:free",
-  "qwen/qwq-32b:free",
 ];
 
 // ── UI Constants ──

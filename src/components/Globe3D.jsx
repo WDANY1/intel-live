@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import * as THREE from "three";
 
 const EVENT_COLORS = {
   strike: "#FF3B30",
@@ -76,7 +77,26 @@ function detectEventType(text) {
   return "default";
 }
 
-export default function Globe3D({ intelItems = [], onSelectEvent, selectedEvent }) {
+function GlobeFallback({ error }) {
+  return (
+    <div style={{
+      width: "100%", height: "100%", position: "relative",
+      background: "radial-gradient(ellipse at center, #0a1628 0%, #060A0F 70%)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontFamily: "var(--mono)", fontSize: "0.85rem", color: "#FF3B30", letterSpacing: 2, marginBottom: 8 }}>
+          GLOBE ERROR
+        </div>
+        <div style={{ fontFamily: "var(--mono)", fontSize: "0.65rem", color: "var(--text-dim)" }}>
+          {error?.message || "3D rendering failed"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
   const containerRef = useRef(null);
   const globeRef = useRef(null);
   const [ready, setReady] = useState(false);
@@ -129,8 +149,6 @@ export default function Globe3D({ intelItems = [], onSelectEvent, selectedEvent 
         // Base points (strategic locations)
         .customLayerData(BASES)
         .customThreeObject((d) => {
-          const THREE = globeRef.current?._three || window.THREE;
-          if (!THREE) return null;
           const group = new THREE.Group();
           // Outer ring
           const ringGeo = new THREE.RingGeometry(d.size * 0.8, d.size, 32);
@@ -245,5 +263,24 @@ export default function Globe3D({ intelItems = [], onSelectEvent, selectedEvent 
         </div>
       )}
     </div>
+  );
+}
+
+// Error boundary wrapper
+import { Component } from "react";
+class GlobeErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) return <GlobeFallback error={this.state.error} />;
+    return this.props.children;
+  }
+}
+
+export default function Globe3D(props) {
+  return (
+    <GlobeErrorBoundary>
+      <Globe3DInner {...props} />
+    </GlobeErrorBoundary>
   );
 }
