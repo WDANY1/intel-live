@@ -133,7 +133,13 @@ function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
   useEffect(() => {
     if (!containerRef.current || globeRef.current) return;
 
+    let cancelled = false;
+    let resizeHandler = null;
+    const container = containerRef.current;
+
     import("globe.gl").then((GlobeModule) => {
+      if (cancelled || !container) return;
+
       const Globe = GlobeModule.default;
 
       const globe = Globe()
@@ -143,19 +149,17 @@ function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
         .showAtmosphere(true)
         .atmosphereColor("#00E5FF")
         .atmosphereAltitude(0.15)
-        .width(containerRef.current.clientWidth)
-        .height(containerRef.current.clientHeight)
+        .width(container.clientWidth)
+        .height(container.clientHeight)
         .pointOfView({ lat: 28, lng: 48, altitude: 2.2 }, 0)
         // Base points (strategic locations)
         .customLayerData(BASES)
         .customThreeObject((d) => {
           const group = new THREE.Group();
-          // Outer ring
           const ringGeo = new THREE.RingGeometry(d.size * 0.8, d.size, 32);
           const ringMat = new THREE.MeshBasicMaterial({ color: d.color, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
           const ring = new THREE.Mesh(ringGeo, ringMat);
           group.add(ring);
-          // Center dot
           const dotGeo = new THREE.CircleGeometry(d.size * 0.3, 16);
           const dotMat = new THREE.MeshBasicMaterial({ color: d.color, side: THREE.DoubleSide });
           const dot = new THREE.Mesh(dotGeo, dotMat);
@@ -175,7 +179,7 @@ function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
         .arcDashAnimateTime(2000)
         .arcStroke(0.5)
         .arcAltitudeAutoScale(0.3)
-        // HTML labels for event points (will add dynamically)
+        // HTML labels for event points
         .htmlElementsData([])
         .htmlElement((d) => {
           const el = document.createElement("div");
@@ -196,35 +200,38 @@ function Globe3DInner({ intelItems = [], onSelectEvent, selectedEvent }) {
           return el;
         })
         .htmlAltitude((d) => d.altitude || 0.01)
-        (containerRef.current);
+        (container);
 
-      // Store reference
       globeRef.current = globe;
 
-      // Auto-rotate slowly
       globe.controls().autoRotate = true;
       globe.controls().autoRotateSpeed = 0.3;
       globe.controls().enableDamping = true;
       globe.controls().dampingFactor = 0.1;
 
-      // Handle resize
-      const handleResize = () => {
-        if (containerRef.current && globeRef.current) {
-          globe.width(containerRef.current.clientWidth);
-          globe.height(containerRef.current.clientHeight);
+      resizeHandler = () => {
+        if (container && globeRef.current) {
+          globe.width(container.clientWidth);
+          globe.height(container.clientHeight);
         }
       };
-      window.addEventListener("resize", handleResize);
+      window.addEventListener("resize", resizeHandler);
 
       setReady(true);
-
-      return () => window.removeEventListener("resize", handleResize);
+    }).catch(() => {
+      // globe.gl failed to load — fallback will show via error boundary
     });
 
     return () => {
+      cancelled = true;
+      if (resizeHandler) window.removeEventListener("resize", resizeHandler);
       if (globeRef.current) {
-        globeRef.current._destructor?.();
+        try { globeRef.current._destructor?.(); } catch {}
         globeRef.current = null;
+      }
+      // Safe cleanup: remove all children globe.gl added to the container
+      while (container && container.firstChild) {
+        try { container.removeChild(container.firstChild); } catch { break; }
       }
     };
   }, []);
