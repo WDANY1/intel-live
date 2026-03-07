@@ -4,6 +4,10 @@ import { AgentManager, verifyIntel } from "./api";
 import ConflictMap from "./components/ConflictMap";
 import EventTimeline from "./components/EventTimeline";
 import MaritimePanel from "./components/MaritimePanel";
+import AiChat from "./components/AiChat";
+import PredictionMarkets from "./components/PredictionMarkets";
+import InstabilityIndex from "./components/InstabilityIndex";
+import NuclearMonitor from "./components/NuclearMonitor";
 
 // ════════════════════════════════════════════════════════
 // UTILITY COMPONENTS — Ops-Center Style
@@ -559,6 +563,10 @@ export default function LiveIntelDashboard() {
   const tabs = [
     { id: "signals", label: "SIGNALS", icon: "📡", count: allItems.length },
     { id: "analysis", label: "ANALYSIS", icon: "🧠" },
+    { id: "chat", label: "AI CHAT", icon: "💬" },
+    { id: "markets", label: "MARKETS", icon: "📈" },
+    { id: "cii", label: "CII", icon: "🌍" },
+    { id: "nuclear", label: "NUCLEAR", icon: "☢️" },
     { id: "cams", label: "LIVE CAMS", icon: "📹", count: WEBCAM_FEEDS.length },
     { id: "news", label: "NEWS 24/7", icon: "📺", count: NEWS_LIVE_STREAMS.length },
     { id: "naval", label: "NAVAL", icon: "🚢" },
@@ -791,6 +799,37 @@ export default function LiveIntelDashboard() {
               </div>
             )}
 
+            {/* ── AI CHAT TAB ── */}
+            {activeTab === "chat" && (
+              <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+                <AiChat apiKey={apiKey} allItems={allItems} analysis={analysis} />
+              </div>
+            )}
+
+            {/* ── PREDICTION MARKETS TAB ── */}
+            {activeTab === "markets" && (
+              <>
+                <SectionHeader icon="📈" title="PREDICTION MARKETS" subtitle="Geopolitical forecasts" />
+                <PredictionMarkets />
+              </>
+            )}
+
+            {/* ── COUNTRY INSTABILITY INDEX TAB ── */}
+            {activeTab === "cii" && (
+              <>
+                <SectionHeader icon="🌍" title="INSTABILITY INDEX" subtitle="Country risk scoring" />
+                <InstabilityIndex />
+              </>
+            )}
+
+            {/* ── NUCLEAR MONITOR TAB ── */}
+            {activeTab === "nuclear" && (
+              <>
+                <SectionHeader icon="☢️" title="NUCLEAR MONITOR" subtitle="Threat tracking" />
+                <NuclearMonitor />
+              </>
+            )}
+
             {/* ── LIVE CAMS TAB ── */}
             {activeTab === "cams" && (
               <div style={{ padding: 12 }}>
@@ -900,7 +939,7 @@ export default function LiveIntelDashboard() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontFamily: "var(--mono)", fontSize: "0.65rem", color: "var(--text-dim)" }}>Refresh: {REFRESH_INTERVAL}s</span>
-          <span style={{ fontFamily: "var(--mono)", fontSize: "0.65rem", color: "var(--accent)" }}>INTEL LIVE v3.0</span>
+          <span style={{ fontFamily: "var(--mono)", fontSize: "0.65rem", color: "var(--accent)" }}>INTEL LIVE v4.0</span>
         </div>
       </div>
 

@@ -34,6 +34,24 @@ const CONFLICT_ZONES = [
   { lat: 26.5667, lng: 56.2500, name: "Hormuz", country: "Intl", type: "chokepoint", icon: "🚢", info: "20% Global Oil Transit", risk: "critical" },
   { lat: 12.5833, lng: 43.1453, name: "Bab el-Mandeb", country: "Intl", type: "chokepoint", icon: "🚢", info: "Active Houthi Attacks", risk: "critical" },
   { lat: 30.4250, lng: 32.3444, name: "Suez Canal", country: "Egypt", type: "chokepoint", icon: "🚢", info: "12% Global Trade", risk: "high" },
+  // ── Global Military Bases ──
+  { lat: 25.9304, lng: -80.1048, name: "CENTCOM HQ", country: "USA", type: "base_us", icon: "🇺🇸", info: "US Central Command — MacDill AFB", risk: "low" },
+  { lat: 11.5469, lng: 43.1456, name: "Camp Lemonnier", country: "Djibouti", type: "base_us", icon: "🇺🇸", info: "US Africa Command Forward Base", risk: "medium" },
+  { lat: 21.3207, lng: 40.4170, name: "Prince Sultan AB", country: "Saudi Arabia", type: "base_us", icon: "🇺🇸", info: "USAF 378th Air Expeditionary Wing", risk: "medium" },
+  { lat: 38.3726, lng: -75.9965, name: "Dover AFB", country: "USA", type: "base_us", icon: "🇺🇸", info: "Strategic Airlift Hub", risk: "low" },
+  { lat: 36.1460, lng: -5.3530, name: "Gibraltar", country: "UK", type: "chokepoint", icon: "🚢", info: "Mediterranean-Atlantic Gateway", risk: "low" },
+  // ── Undersea Cable Landing Points ──
+  { lat: 30.0000, lng: 32.5500, name: "Suez Cable Hub", country: "Egypt", type: "infrastructure", icon: "🔌", info: "17 undersea cables — major global nexus", risk: "high" },
+  { lat: 25.2766, lng: 55.2962, name: "Dubai Cable Hub", country: "UAE", type: "infrastructure", icon: "🔌", info: "12 undersea cables — ME internet hub", risk: "medium" },
+  { lat: 22.3193, lng: 39.0000, name: "Jeddah Cable Hub", country: "Saudi Arabia", type: "infrastructure", icon: "🔌", info: "8 undersea cables", risk: "medium" },
+  { lat: 12.8000, lng: 43.2000, name: "Djibouti Cable Hub", country: "Djibouti", type: "infrastructure", icon: "🔌", info: "11 undersea cables — Africa/ME junction", risk: "high" },
+  // ── Oil/Gas Pipelines ──
+  { lat: 30.3753, lng: 48.1745, name: "Basra Oil Terminal", country: "Iraq", type: "energy", icon: "🛢️", info: "Iraq main oil export terminal — 3.5M bbl/day", risk: "high" },
+  { lat: 26.2235, lng: 50.5876, name: "Bahrain Refinery", country: "Bahrain", type: "energy", icon: "🛢️", info: "BAPCO refinery — 267K bbl/day", risk: "medium" },
+  { lat: 26.0667, lng: 56.3500, name: "Fujairah Terminal", country: "UAE", type: "energy", icon: "🛢️", info: "Strategic oil storage — bypasses Hormuz", risk: "medium" },
+  { lat: 21.4900, lng: 39.1900, name: "Yanbu Terminal", country: "Saudi Arabia", type: "energy", icon: "🛢️", info: "Red Sea oil export — East-West Pipeline endpoint", risk: "medium" },
+  { lat: 26.3000, lng: 50.2000, name: "Ras Tanura", country: "Saudi Arabia", type: "energy", icon: "🛢️", info: "World largest oil export facility — 7M bbl/day capacity", risk: "high" },
+  { lat: 29.0700, lng: 48.0800, name: "Kharg Island", country: "Iran", type: "energy", icon: "🛢️", info: "Iran main oil export terminal — 90% exports", risk: "critical" },
 ];
 
 // Location extraction
@@ -101,6 +119,7 @@ const RISK_COLORS = { critical: "#FF3B30", high: "#FFB020", medium: "#FFD60A", l
 const TYPE_COLORS = {
   capital: "#A78BFA", nuclear: "#FF3B30", military: "#FFB020", naval: "#00E5FF",
   command: "#D946EF", base_us: "#3B82F6", proxy: "#FB923C", strategic: "#FFD60A", chokepoint: "#22D3EE",
+  infrastructure: "#8B5CF6", energy: "#F59E0B",
 };
 
 // Layer definitions
@@ -112,6 +131,8 @@ const LAYERS = [
   { id: "base_us", label: "US BASES", color: "#3B82F6" },
   { id: "proxy", label: "PROXY", color: "#FB923C" },
   { id: "chokepoint", label: "MARITIME", color: "#22D3EE" },
+  { id: "infrastructure", label: "CABLES", color: "#8B5CF6" },
+  { id: "energy", label: "OIL/GAS", color: "#F59E0B" },
   { id: "events", label: "INTEL", color: "#00E5FF" },
 ];
 
@@ -396,6 +417,8 @@ export default function ConflictMap({ intelItems = [], analysis, externalLayer }
             { icon: "⚓", color: "#00E5FF", label: "Naval / US" },
             { icon: "🎯", color: "#FB923C", label: "Proxy Forces" },
             { icon: "🚢", color: "#22D3EE", label: "Chokepoints" },
+            { icon: "🔌", color: "#8B5CF6", label: "Cables" },
+            { icon: "🛢️", color: "#F59E0B", label: "Oil/Gas" },
           ].map(({ icon, color, label }) => (
             <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontSize: "0.7rem" }}>{icon}</span>

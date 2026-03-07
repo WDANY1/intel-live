@@ -87,12 +87,12 @@ export default function LandingPage({ onEnter }) {
   }, []);
 
   const features = [
-    { icon: "🗺️", title: "INTERACTIVE WAR MAP", desc: "Conflict heatmap with event markers, 8 layer controls, 45+ strategic locations tracked in real-time.", color: "#00E5FF" },
+    { icon: "🗺️", title: "INTERACTIVE WAR MAP", desc: "Conflict heatmap with 10 layer controls, 60+ strategic locations, undersea cables, oil terminals & pipelines.", color: "#00E5FF" },
     { icon: "📡", title: "7 AI AGENTS", desc: "SIGINT, OSINT, HUMINT, GEOINT, ECONINT, PROXY, DIPLO — autonomous intelligence gathering every 5 minutes.", color: "#FF3B30" },
-    { icon: "🧠", title: "MULTI-MODEL AI", desc: `${AI_MODELS.length} free AI models with cross-verification consensus analysis across multiple providers.`, color: "#A78BFA" },
-    { icon: "🚢", title: "MARITIME TRACKER", desc: "Strategic chokepoint monitoring — Hormuz, Bab el-Mandeb, Suez Canal. Naval vessel tracking.", color: "#00E5FF" },
-    { icon: "📹", title: "LIVE CAMERAS", desc: "Embedded live feeds from Jerusalem, Tel Aviv, Dubai, Mecca, Beirut + 6 international 24/7 news streams.", color: "#FFB020" },
-    { icon: "⚡", title: "REAL-TIME SIGNALS", desc: "Severity classification, source reliability scoring, location extraction, automated breaking alerts.", color: "#30D158" },
+    { icon: "💬", title: "AI ANALYST CHAT", desc: "Conversational AI analyst with real-time context. Ask about threats, predictions, or any intelligence query.", color: "#A78BFA" },
+    { icon: "📈", title: "PREDICTION MARKETS", desc: "Geopolitical prediction market data — conflict probabilities, economic forecasts, escalation odds.", color: "#FFD60A" },
+    { icon: "☢️", title: "NUCLEAR MONITOR", desc: "Iran nuclear breakout timeline, facility tracking, IAEA status, delivery systems assessment.", color: "#FF3B30" },
+    { icon: "🌍", title: "INSTABILITY INDEX", desc: "Country risk scoring across 5 factors. 8 countries tracked with threat analysis and trend monitoring.", color: "#30D158" },
   ];
 
   return (
@@ -171,7 +171,7 @@ export default function LandingPage({ onEnter }) {
               { value: AI_MODELS.length, suffix: "", label: "AI MODELS", color: "#A78BFA" },
               { value: OSINT_SOURCES.length, suffix: "+", label: "OSINT SOURCES", color: "#00E5FF" },
               { value: NEWS_CHANNELS.length, suffix: "", label: "NEWS FEEDS", color: "#FFB020" },
-              { value: 45, suffix: "+", label: "LOCATIONS", color: "#30D158" },
+              { value: 60, suffix: "+", label: "LOCATIONS", color: "#30D158" },
             ].map((stat) => (
               <div key={stat.label} style={{ textAlign: "center" }}>
                 <div style={{ fontFamily: "var(--mono)", fontSize: "2.2rem", fontWeight: 800, color: stat.color, lineHeight: 1 }}>
