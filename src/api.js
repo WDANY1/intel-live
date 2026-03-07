@@ -127,20 +127,15 @@ async function runAgent(apiKey, agent, onProgress) {
   }
 }
 
-// ── Run agents in BATCHES of 2 ──
+// ── Run ALL agents in parallel (fast) ──
 export async function runAllAgents(apiKey, onAgentProgress) {
   const allResults = {};
-  const batchSize = 2;
 
-  for (let i = 0; i < AGENTS.length; i += batchSize) {
-    const batch = AGENTS.slice(i, i + batchSize);
-    const promises = batch.map(async (agent) => {
-      const items = await runAgent(apiKey, agent, onAgentProgress);
-      allResults[agent.id] = items;
-    });
-    await Promise.allSettled(promises);
-    if (i + batchSize < AGENTS.length) await delay(800);
-  }
+  const promises = AGENTS.map(async (agent) => {
+    const items = await runAgent(apiKey, agent, onAgentProgress);
+    allResults[agent.id] = items;
+  });
+  await Promise.allSettled(promises);
   return allResults;
 }
 

@@ -5,6 +5,9 @@
   "functions": {
     "api/claude.js": {
       "maxDuration": 60
+    },
+    "api/rss.js": {
+      "maxDuration": 15
     }
   },
   "rewrites": [

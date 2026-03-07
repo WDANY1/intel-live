@@ -4,9 +4,9 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg-primary: #0B0F14;
-  --bg-secondary: #0E1319;
-  --bg-panel: #121821;
+  --bg-primary: #060A0F;
+  --bg-secondary: #0A0E14;
+  --bg-panel: #0C1018;
   --bg-card: rgba(255,255,255,0.03);
   --bg-card-hover: rgba(255,255,255,0.06);
   --border: rgba(255,255,255,0.08);
@@ -36,7 +36,7 @@
 html { font-size: 15px; }
 
 body {
-  background: var(--bg-primary);
+  background: #060A0F;
   color: var(--text-primary);
   font-family: var(--sans);
   line-height: 1.5;
@@ -185,7 +185,7 @@ button {
    LEAFLET DARK THEME
    ══════════════════════════════════════════════════════ */
 .leaflet-container {
-  background: #0B0F14 !important;
+  background: #060A0F !important;
   font-family: 'JetBrains Mono', monospace;
 }
 .leaflet-popup-content-wrapper {
@@ -200,7 +200,7 @@ button {
   font-size: 13px !important;
 }
 .leaflet-popup-tip {
-  background: #121821 !important;
+  background: #0C1018 !important;
   box-shadow: none !important;
 }
 .leaflet-popup-close-button {
