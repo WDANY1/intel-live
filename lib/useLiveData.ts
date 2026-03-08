@@ -3,13 +3,14 @@
 // ============================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { AircraftPosition, FireHotspot, NaturalEvent, GDELTEvent } from './types'
+import type { AircraftPosition, FireHotspot, NaturalEvent, GDELTEvent, IntelItem } from './types'
 
 interface LiveData {
   aircraft: AircraftPosition[]
   fires: FireHotspot[]
   naturalEvents: NaturalEvent[]
   gdeltEvents: GDELTEvent[]
+  extractedIntel: IntelItem[]
   loading: boolean
   errors: Record<string, string>
   lastUpdated: Record<string, number>
@@ -27,6 +28,7 @@ export function useLiveData(): LiveData {
   const [fires, setFires] = useState<FireHotspot[]>([])
   const [naturalEvents, setNaturalEvents] = useState<NaturalEvent[]>([])
   const [gdeltEvents, setGdeltEvents] = useState<GDELTEvent[]>([])
+  const [extractedIntel, setExtractedIntel] = useState<IntelItem[]>([])
   const [loading, setLoading] = useState(true)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [lastUpdated, setLastUpdated] = useState<Record<string, number>>({})
@@ -72,11 +74,24 @@ export function useLiveData(): LiveData {
     }
   }, [])
 
+  const fetchExtracted = useCallback(async () => {
+    try {
+      const res = await fetch('/api/extract')
+      if (!res.ok) throw new Error(`${res.status}`)
+      const data = await res.json()
+      setExtractedIntel(data.intel || [])
+      setLastUpdated(prev => ({ ...prev, extracted: Date.now() }))
+      setErrors(prev => { const n = { ...prev }; delete n.extracted; return n })
+    } catch (err: any) {
+      setErrors(prev => ({ ...prev, extracted: err.message }))
+    }
+  }, [])
+
   const refresh = useCallback(() => {
     setLoading(true)
-    Promise.allSettled([fetchAircraft(), fetchFires(), fetchEvents()])
+    Promise.allSettled([fetchAircraft(), fetchFires(), fetchEvents(), fetchExtracted()])
       .finally(() => setLoading(false))
-  }, [fetchAircraft, fetchFires, fetchEvents])
+  }, [fetchAircraft, fetchFires, fetchEvents, fetchExtracted])
 
   useEffect(() => {
     // Initial fetch
@@ -87,12 +102,13 @@ export function useLiveData(): LiveData {
       setInterval(fetchAircraft, INTERVALS.aircraft),
       setInterval(fetchFires, INTERVALS.fires),
       setInterval(fetchEvents, INTERVALS.events),
+      setInterval(fetchExtracted, 180_000), // 3 min
     ]
 
     return () => {
       intervalsRef.current.forEach(clearInterval)
     }
-  }, [refresh, fetchAircraft, fetchFires, fetchEvents])
+  }, [refresh, fetchAircraft, fetchFires, fetchEvents, fetchExtracted])
 
-  return { aircraft, fires, naturalEvents, gdeltEvents, loading, errors, lastUpdated, refresh }
+  return { aircraft, fires, naturalEvents, gdeltEvents, extractedIntel, loading, errors, lastUpdated, refresh }
 }

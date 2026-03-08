@@ -737,8 +737,21 @@ export default function LiveIntelDashboard() {
   }, [])
 
   const allItems = useMemo(
-    () => Object.values(intel).flat().sort((a, b) => (b.severity || 0) - (a.severity || 0)),
-    [intel]
+    () => {
+      const aiItems = Object.values(intel).flat()
+      const combined = [...aiItems, ...liveData.extractedIntel]
+      // Deduplicate by headline similarity
+      const seen = new Set<string>()
+      return combined
+        .filter(item => {
+          const key = item.headline.toLowerCase().slice(0, 60)
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        .sort((a, b) => (b.severity || 0) - (a.severity || 0))
+    },
+    [intel, liveData.extractedIntel]
   )
   const totalItems = allItems.length + rssArticles.length
 
