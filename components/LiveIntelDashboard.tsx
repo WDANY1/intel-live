@@ -14,6 +14,7 @@ import {
 import { AgentManager, verifyIntel } from '@/lib/agents'
 import { useLiveData } from '@/lib/useLiveData'
 import { useEventStream } from '@/lib/useEventStream'
+import { extractIntelFromRSS } from '@/lib/extraction'
 import type {
   IntelItem,
   AnalysisResult,
@@ -729,10 +730,16 @@ export default function LiveIntelDashboard() {
       .catch(() => setRssLoading(false))
   }, [])
 
+  // Convert RSS articles to structured intel items (client-side extraction)
+  const rssIntelItems = useMemo(
+    () => rssArticles.length > 0 ? extractIntelFromRSS(rssArticles) : [],
+    [rssArticles]
+  )
+
   const allItems = useMemo(
     () => {
       const aiItems = Object.values(intel).flat()
-      const combined = [...aiItems, ...liveData.extractedIntel]
+      const combined = [...aiItems, ...rssIntelItems, ...liveData.extractedIntel]
       // Deduplicate by headline similarity
       const seen = new Set<string>()
       return combined
@@ -744,7 +751,7 @@ export default function LiveIntelDashboard() {
         })
         .sort((a, b) => (b.severity || 0) - (a.severity || 0))
     },
-    [intel, liveData.extractedIntel]
+    [intel, rssIntelItems, liveData.extractedIntel]
   )
   const totalItems = allItems.length + rssArticles.length
 
@@ -878,14 +885,21 @@ export default function LiveIntelDashboard() {
               <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
                 {leftTab === 'signals' && (
                   <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
-                    {allItems.length === 0 && (
+                    {allItems.length === 0 && rssLoading && (
                       <div style={{ padding: 24, textAlign: 'center' }}>
                         <div className="spin-loading" style={{ margin: '0 auto 10px' }} />
                         <div style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', color: 'var(--text-dim)', letterSpacing: 2 }}>
-                          AI AGENTS SCANNING...
+                          LOADING INTELLIGENCE FEEDS...
+                        </div>
+                      </div>
+                    )}
+                    {allItems.length === 0 && !rssLoading && (
+                      <div style={{ padding: 24, textAlign: 'center' }}>
+                        <div style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', color: 'var(--text-dim)', letterSpacing: 2 }}>
+                          NO CONFLICT-RELATED SIGNALS
                         </div>
                         <div style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: 'var(--text-dim)', marginTop: 4 }}>
-                          See NEWS tab for instant RSS feeds
+                          Check NEWS tab for all articles
                         </div>
                       </div>
                     )}
