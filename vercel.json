@@ -1,17 +1,6 @@
 {
-  "buildCommand": "vite build",
-  "outputDirectory": "dist",
-  "framework": "vite",
-  "functions": {
-    "api/claude.js": {
-      "maxDuration": 60
-    },
-    "api/rss.js": {
-      "maxDuration": 15
-    }
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/((?!api).*)", "destination": "/index.html" }
-  ]
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "devCommand": "next dev",
+  "outputDirectory": ".next"
 }
