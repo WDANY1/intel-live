@@ -109,12 +109,13 @@ export const WEBCAM_FEEDS = [
 ]
 
 export const NEWS_STREAMS = [
-  { id: "nSon3dyDgV0", name: "Al Jazeera", color: "#06b6d4" },
-  { id: "l8pmfNyEoAE", name: "France 24", color: "#3b82f6" },
+  { id: "gJ-1wf4ZBIY", name: "Al Jazeera", color: "#06b6d4" },
+  { id: "h3MuIUNCCzI", name: "France 24", color: "#3b82f6" },
   { id: "9Auq9mYxFEE", name: "Sky News", color: "#f97316" },
-  { id: "w_Ma8oQLmSM", name: "BBC World", color: "#ef4444" },
-  { id: "7cHsY5Xyv1w", name: "DW News", color: "#8b5cf6" },
-  { id: "wgMJMQTQEuY", name: "Euronews", color: "#22c55e" },
+  { id: "myydDjOYMdk", name: "BBC World", color: "#ef4444" },
+  { id: "GE_SfNVNyqk", name: "DW News", color: "#8b5cf6" },
+  { id: "pJif8PAOruI", name: "Euronews", color: "#22c55e" },
+  { id: "jL8uDJJBjMA", name: "Reuters Live", color: "#ff6600" },
 ]
 
 // ── Agent Definitions ──
@@ -346,7 +347,7 @@ export const WEBCAM_REGIONS = [
 export const REFRESH_INTERVAL = 300
 export const MAX_LOG_ENTRIES = 50
 export const MAX_TICKER_ITEMS = 30
-export const ITEMS_PER_AGENT_QUERY = 5
+export const ITEMS_PER_AGENT_QUERY = 3
 
 export const SEVERITY_CONFIG = {
   5: { color: "#FF3B30", label: "CRITICAL", bg: "rgba(255,59,48,0.12)" },

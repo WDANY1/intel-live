@@ -64,22 +64,14 @@ function parseJSON(raw: string): any {
 
 async function runAgentQuery(apiKey: string, agent: Agent): Promise<IntelItem[]> {
   const model = AGENT_MODEL_MAP[agent.id] || AI_MODELS[0].id
-  const allQueries = agent.queries.join(' OR ')
-  const sourceMentions = agent.sources.map((s) => `@${s}`).join(', ')
+  const mainQuery = agent.queries[0]
   const today = new Date().toLocaleDateString('en-US', {
     month: 'long', day: 'numeric', year: 'numeric',
   })
 
-  const prompt = `You are an intelligence analyst monitoring the Iran-Israel-US conflict. Report on the very latest developments about: "${allQueries}".
-Today is ${today}. Focus ONLY on the most recent events from the last 24-48 hours.
-IMPORTANT: Include information from BOTH sides — Western/Israeli sources AND Iranian/regional sources. Cross-reference claims. Note when info comes from only one side.
-Key OSINT accounts: ${sourceMentions}
-Key news outlets: ${NEWS_SOURCES.slice(0, 16).join(', ')}
-
-Return ONLY a valid JSON array of exactly ${ITEMS_PER_AGENT_QUERY} intelligence items about real, verified events.
-Each item: {"headline":"<concise title>","summary":"<2-3 detailed sentences about what happened>","source":"<news outlet or OSINT account>","time":"<e.g. 3 hours ago>","severity":<1-5>,"verified":<true or false>,"location":"<city/country>"}
-Severity guide: 1=routine, 2=notable, 3=significant, 4=high-impact, 5=critical/emergency.
-Return ONLY the JSON array, no markdown, no backticks, no explanation.`
+  const prompt = `Intelligence analyst: "${mainQuery}". Today is ${today}. Last 24h only. Both sides.
+Return JSON array of ${ITEMS_PER_AGENT_QUERY} items: [{"headline":"<title>","summary":"<2 sentences>","source":"<outlet>","time":"<when>","severity":<1-5>,"verified":<bool>,"location":"<place>"}]
+Severity: 1=routine 2=notable 3=significant 4=high 5=critical. JSON only, no markdown.`
 
   const { text, usedModel } = await callLLM(apiKey, prompt, model)
   const items = parseJSON(text)

@@ -48,7 +48,7 @@ interface Message {
 
 async function callOpenRouter(apiKey: string, messages: Message[], model: string) {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 25000)
+  const timeout = setTimeout(() => controller.abort(), 12000)
   try {
     return await fetch(OPENROUTER_URL, {
       method: 'POST',
@@ -68,7 +68,7 @@ async function callOpenRouter(apiKey: string, messages: Message[], model: string
 
 async function callGroq(apiKey: string, messages: Message[], model: string) {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 20000)
+  const timeout = setTimeout(() => controller.abort(), 10000)
   try {
     return await fetch(GROQ_URL, {
       method: 'POST',
@@ -83,7 +83,7 @@ async function callGroq(apiKey: string, messages: Message[], model: string) {
 
 async function callCerebras(apiKey: string, messages: Message[], model: string) {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 20000)
+  const timeout = setTimeout(() => controller.abort(), 10000)
   try {
     return await fetch(CEREBRAS_URL, {
       method: 'POST',
@@ -98,7 +98,7 @@ async function callCerebras(apiKey: string, messages: Message[], model: string) 
 
 async function callMistral(apiKey: string, messages: Message[], model: string) {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 20000)
+  const timeout = setTimeout(() => controller.abort(), 10000)
   try {
     return await fetch(MISTRAL_URL, {
       method: 'POST',
@@ -113,7 +113,7 @@ async function callMistral(apiKey: string, messages: Message[], model: string) {
 
 async function callGemini(apiKey: string, prompt: string, model = 'gemini-2.0-flash') {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 20000)
+  const timeout = setTimeout(() => controller.abort(), 10000)
   try {
     return await fetch(`${GEMINI_URL}/${model}:generateContent?key=${apiKey}`, {
       method: 'POST',
@@ -131,7 +131,7 @@ async function callGemini(apiKey: string, prompt: string, model = 'gemini-2.0-fl
 
 async function callHuggingFace(apiKey: string, messages: Message[], model: string) {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 30000)
+  const timeout = setTimeout(() => controller.abort(), 10000)
   const prompt = messages.map((m) => `${m.role}: ${m.content}`).join('\n\n')
   try {
     return await fetch(`${HF_URL}/${model}`, {

@@ -35,6 +35,9 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://unpkg.com" />
+        <link rel="prefetch" href="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg" as="image" />
+        <link rel="prefetch" href="//unpkg.com/three-globe/example/img/night-sky.png" as="image" />
       </head>
       <body className="h-full overflow-hidden bg-[#060A0F] text-[#E5E7EB]">
         {children}

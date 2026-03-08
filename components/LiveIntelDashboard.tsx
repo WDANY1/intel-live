@@ -218,7 +218,7 @@ function SignalCard({
     <motion.div
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.6) }}
+      transition={{ duration: 0.15, delay: Math.min(index * 0.015, 0.3) }}
       onClick={() => onClick?.(item)}
       style={{
         padding: '8px 12px', cursor: 'pointer', borderLeft: `2px solid ${sev.color}`,
@@ -276,7 +276,7 @@ function RSSCard({ article, index }: { article: RSSArticle; index: number }) {
     <motion.div
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.2, delay: Math.min(index * 0.02, 0.5) }}
+      transition={{ duration: 0.12, delay: Math.min(index * 0.01, 0.2) }}
       style={{ padding: '8px 12px', borderLeft: `2px solid ${sev.color}`, borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.15s' }}
       whileHover={{ backgroundColor: 'rgba(255,255,255,0.025)' }}
     >
@@ -551,10 +551,11 @@ function EmbeddedWebcams() {
           >
             <div style={{ position: 'relative', paddingTop: '56.25%', background: '#000' }}>
               <iframe
-                src={`https://www.youtube.com/embed/${activeCam.id}?autoplay=1&mute=1&controls=1&rel=0`}
+                src={`https://www.youtube.com/embed/${activeCam.id}?autoplay=1&mute=1&controls=1&rel=0&modestbranding=1`}
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
-                allow="autoplay; encrypted-media"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
+                loading="lazy"
               />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 8px' }}>
@@ -651,43 +652,34 @@ const RADARS = [
 ]
 
 function EmbeddedRadar() {
-  const [activeRadar, setActiveRadar] = useState<typeof RADARS[0] | null>(null)
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <AnimatePresence>
-        {activeRadar && (
-          <motion.div
-            key="embed"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 220 }}
-            exit={{ opacity: 0, height: 0 }}
-            style={{ flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden' }}
-          >
-            <iframe src={activeRadar.embedUrl} style={{ width: '100%', height: 220, border: 'none' }}
-              sandbox="allow-scripts allow-same-origin allow-popups" title={activeRadar.name} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 8px' }}>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: activeRadar.color, fontWeight: 700 }}>{activeRadar.icon} {activeRadar.name}</span>
-              <button onClick={() => setActiveRadar(null)} style={{ fontFamily: 'var(--mono)', fontSize: '0.7rem', color: 'var(--text-dim)', cursor: 'pointer' }}>✕</button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: 'var(--text-dim)', letterSpacing: 1 }}>
+          LIVE TRACKING TOOLS
+        </div>
+      </div>
       <div style={{ flex: 1, overflow: 'auto', padding: '4px 0' }}>
         {RADARS.map((radar) => (
-          <motion.div
+          <motion.a
             key={radar.id}
-            whileHover={{ backgroundColor: 'rgba(0,229,255,0.04)' }}
-            onClick={() => setActiveRadar(radar)}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.02)', cursor: 'pointer' }}
+            href={radar.embedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            whileHover={{ backgroundColor: 'rgba(0,229,255,0.06)' }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
+              borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer',
+              textDecoration: 'none', color: 'inherit',
+            }}
           >
-            <span style={{ fontSize: '0.9rem' }}>{radar.icon}</span>
+            <span style={{ fontSize: '1rem' }}>{radar.icon}</span>
             <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', fontWeight: 600, color: radar.color }}>{radar.name}</div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.48rem', color: 'var(--text-dim)' }}>{radar.desc}</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.7rem', fontWeight: 600, color: radar.color }}>{radar.name}</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: 'var(--text-dim)', marginTop: 1 }}>{radar.desc}</div>
             </div>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: 'var(--accent)' }}>▶</span>
-          </motion.div>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: '0.55rem', color: 'var(--accent)', opacity: 0.6 }}>↗</span>
+          </motion.a>
         ))}
       </div>
     </div>
@@ -883,9 +875,9 @@ export default function LiveIntelDashboard() {
 
               <AgentDots agentStatuses={agentStatuses} />
 
-              <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
                 {leftTab === 'signals' && (
-                  <div style={{ height: '100%', overflow: 'auto', position: 'relative' }}>
+                  <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
                     {allItems.length === 0 && (
                       <div style={{ padding: 24, textAlign: 'center' }}>
                         <div className="spin-loading" style={{ margin: '0 auto 10px' }} />
@@ -920,7 +912,7 @@ export default function LiveIntelDashboard() {
                 )}
 
                 {leftTab === 'news' && (
-                  <div style={{ height: '100%', overflow: 'auto' }}>
+                  <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
                     {rssLoading && (
                       <div style={{ padding: 24, textAlign: 'center' }}>
                         <div className="spin-loading" style={{ margin: '0 auto 10px', borderTopColor: '#06b6d4' }} />
@@ -934,7 +926,7 @@ export default function LiveIntelDashboard() {
                 )}
 
                 {leftTab === 'analysis' && (
-                  <div style={{ height: '100%', overflow: 'auto' }}>
+                  <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
                     {analysis ? (
                       <AnalysisPanel analysis={analysis} />
                     ) : (
@@ -992,7 +984,7 @@ export default function LiveIntelDashboard() {
                   </button>
                 ))}
               </div>
-              <div style={{ flex: 1, overflow: 'hidden' }}>
+              <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
                 {rightTab === 'webcams' && <EmbeddedWebcams />}
                 {rightTab === 'radar' && <EmbeddedRadar />}
               </div>
