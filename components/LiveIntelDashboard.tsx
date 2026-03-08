@@ -13,6 +13,7 @@ import {
 } from '@/lib/config'
 import { AgentManager, verifyIntel } from '@/lib/agents'
 import { useLiveData } from '@/lib/useLiveData'
+import { useEventStream } from '@/lib/useEventStream'
 import type {
   IntelItem,
   AnalysisResult,
@@ -714,6 +715,9 @@ export default function LiveIntelDashboard() {
 
   // Live data feeds (aircraft, fires, EONET, GDELT)
   const liveData = useLiveData()
+
+  // SSE connection for real-time push
+  const { connected: sseConnected } = useEventStream()
 
   // Fetch RSS feeds immediately for instant content
   useEffect(() => {

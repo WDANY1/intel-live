@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchAircraft } from '@/lib/livedata'
+import { eventStore } from '@/lib/cache'
 
 export const maxDuration = 15
 
@@ -39,6 +40,19 @@ export async function GET(request: NextRequest) {
     }
 
     cache = { data: result, ts: Date.now() }
+
+    // Publish alerts for military aircraft to SSE stream
+    const military = aircraft.filter(a => a.category === 'military')
+    if (military.length > 0) {
+      eventStore.push('aircraft_alert', {
+        count: military.length,
+        aircraft: military.slice(0, 5).map(a => ({
+          callsign: a.callsign,
+          origin: a.originCountry,
+          alt: a.altitude,
+        })),
+      })
+    }
 
     return NextResponse.json(result, {
       headers: { 'X-Cache': 'MISS', 'Cache-Control': 'public, s-maxage=30' },
