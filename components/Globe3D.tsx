@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import * as THREE from 'three'
-import type { IntelItem, StrategicBase, ConflictArc, GlobeEventPoint } from '@/lib/types'
+import type { IntelItem, StrategicBase, ConflictArc, GlobeEventPoint, AircraftPosition, FireHotspot } from '@/lib/types'
 
 // ── Severity config ──
 const SEVERITY_COLORS: Record<number, string> = {
@@ -81,7 +81,7 @@ function extractCoords(item: IntelItem): { lat: number; lng: number } | null {
 }
 
 // ── Layer system ──
-export type GlobeLayerId = 'events' | 'bases' | 'arcs' | 'nuclear' | 'energy' | 'usForces'
+export type GlobeLayerId = 'events' | 'bases' | 'arcs' | 'nuclear' | 'energy' | 'usForces' | 'aircraft' | 'fires'
 
 export interface GlobeLayer {
   id: GlobeLayerId
@@ -98,6 +98,8 @@ const DEFAULT_LAYERS: GlobeLayer[] = [
   { id: 'nuclear', label: 'NUCLEAR', icon: '☢', color: '#FF3B30', enabled: true },
   { id: 'energy', label: 'ENERGY', icon: '⚡', color: '#F59E0B', enabled: true },
   { id: 'usForces', label: 'US FORCES', icon: '★', color: '#60A5FA', enabled: true },
+  { id: 'aircraft', label: 'AIRCRAFT', icon: '✈', color: '#22D3EE', enabled: true },
+  { id: 'fires', label: 'FIRES/SAT', icon: '🔥', color: '#F97316', enabled: true },
 ]
 
 // ── Real-time solar position ──
@@ -119,6 +121,8 @@ interface Props {
   intelItems: IntelItem[]
   onSelectEvent?: (item: IntelItem) => void
   selectedEvent?: IntelItem | null
+  aircraft?: AircraftPosition[]
+  fires?: FireHotspot[]
 }
 
 function GlobeFallback({ error }: { error?: Error }) {
@@ -138,7 +142,9 @@ function GlobeFallback({ error }: { error?: Error }) {
 }
 
 // ── Globe HUD ──
-function GlobeHUD({ sunPos, eventCount }: { sunPos: { lat: number; lng: number } | null; eventCount: number }) {
+function GlobeHUD({ sunPos, eventCount, aircraftCount, fireCount }: {
+  sunPos: { lat: number; lng: number } | null; eventCount: number; aircraftCount?: number; fireCount?: number
+}) {
   const [time, setTime] = useState(new Date())
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000)
@@ -163,6 +169,16 @@ function GlobeHUD({ sunPos, eventCount }: { sunPos: { lat: number; lng: number }
       <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: '#FF3B30' }}>
         {eventCount} events
       </span>
+      {(aircraftCount ?? 0) > 0 && (
+        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: '#22D3EE' }}>
+          ✈ {aircraftCount}
+        </span>
+      )}
+      {(fireCount ?? 0) > 0 && (
+        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: '#F97316' }}>
+          🔥 {fireCount}
+        </span>
+      )}
     </div>
   )
 }
@@ -220,7 +236,7 @@ function LayerControls({ layers, onToggle }: { layers: GlobeLayer[]; onToggle: (
 }
 
 // ── Main Globe Inner ──
-function Globe3DInner({ intelItems, onSelectEvent, selectedEvent }: Props) {
+function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [], fires = [] }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const globeRef = useRef<any>(null)
   const cloudMeshRef = useRef<THREE.Mesh | null>(null)
@@ -472,6 +488,62 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent }: Props) {
     globeRef.current.arcsData(filteredArcs)
   }, [filteredArcs, ready])
 
+  // Update aircraft points when data changes
+  const aircraftPoints = useMemo(() => {
+    if (!layerMap.aircraft || !aircraft.length) return []
+    return aircraft
+      .filter(a => !a.onGround && a.lat && a.lng)
+      .slice(0, 300)
+      .map(a => ({
+        lat: a.lat,
+        lng: a.lng,
+        alt: Math.min((a.altitude || 1000) / 100000, 0.15),
+        color: a.category === 'military' ? '#FF3B30' : a.category === 'government' ? '#FFB020' : '#22D3EE',
+        size: a.category === 'military' ? 0.35 : 0.15,
+        label: `${a.callsign || a.icao24} [${a.originCountry}] ${Math.round(a.altitude)}m`,
+      }))
+  }, [aircraft, layerMap.aircraft])
+
+  useEffect(() => {
+    if (!globeRef.current || !ready) return
+    globeRef.current
+      .pointsData(aircraftPoints)
+      .pointLat('lat')
+      .pointLng('lng')
+      .pointAltitude('alt')
+      .pointColor('color')
+      .pointRadius('size')
+      .pointLabel('label')
+  }, [aircraftPoints, ready])
+
+  // Update fire/hotspot rings when data changes
+  const fireRings = useMemo(() => {
+    if (!layerMap.fires || !fires.length) return []
+    return fires
+      .filter(f => f.confidence !== 'low' && f.frp > 5)
+      .slice(0, 200)
+      .map(f => ({
+        lat: f.lat,
+        lng: f.lng,
+        maxR: Math.min(f.frp / 20, 3),
+        propagationSpeed: 2,
+        repeatPeriod: 1200,
+        color: f.frp > 100 ? '#FF3B30' : f.frp > 30 ? '#FB923C' : '#F59E0B',
+      }))
+  }, [fires, layerMap.fires])
+
+  useEffect(() => {
+    if (!globeRef.current || !ready) return
+    globeRef.current
+      .ringsData(fireRings)
+      .ringLat('lat')
+      .ringLng('lng')
+      .ringMaxRadius('maxR')
+      .ringPropagationSpeed('propagationSpeed')
+      .ringRepeatPeriod('repeatPeriod')
+      .ringColor('color')
+  }, [fireRings, ready])
+
   // Fly to selected event
   useEffect(() => {
     if (!globeRef.current || !selectedEvent) return
@@ -501,7 +573,7 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent }: Props) {
       )}
       {ready && (
         <>
-          <GlobeHUD sunPos={sunPos} eventCount={intelItems.length} />
+          <GlobeHUD sunPos={sunPos} eventCount={intelItems.length} aircraftCount={aircraft.length} fireCount={fires.length} />
           <LayerControls layers={layers} onToggle={toggleLayer} />
         </>
       )}

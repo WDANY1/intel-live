@@ -12,6 +12,7 @@ import {
   SEVERITY_CONFIG,
 } from '@/lib/config'
 import { AgentManager, verifyIntel } from '@/lib/agents'
+import { useLiveData } from '@/lib/useLiveData'
 import type {
   IntelItem,
   AnalysisResult,
@@ -92,9 +93,9 @@ function FloatingParticles() {
 
 // ── Top Navigation Bar ──
 function TopBar({
-  status, cycle, totalItems, modelsActive, onRefresh,
+  status, cycle, totalItems, modelsActive, onRefresh, aircraftCount, fireCount,
 }: {
-  status: string; cycle: number; totalItems: number; modelsActive: number; onRefresh: () => void
+  status: string; cycle: number; totalItems: number; modelsActive: number; onRefresh: () => void; aircraftCount?: number; fireCount?: number
 }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => {
@@ -133,6 +134,8 @@ function TopBar({
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, fontFamily: 'var(--mono)', fontSize: '0.6rem', color: 'var(--text-muted)', letterSpacing: 1 }}>
         <span><span style={{ color: 'var(--accent)' }}>{totalItems}</span> SIGNALS</span>
         <span><span style={{ color: 'var(--accent)' }}>{modelsActive}</span> AI</span>
+        {(aircraftCount ?? 0) > 0 && <span style={{ color: '#22D3EE' }}>✈ {aircraftCount}</span>}
+        {(fireCount ?? 0) > 0 && <span style={{ color: '#F97316' }}>🔥 {fireCount}</span>}
         <span>C<span style={{ color: 'var(--accent)' }}>#{cycle}</span></span>
         <span style={{ color: 'var(--text-dim)' }}>{time.toLocaleTimeString('en-GB', { hour12: false })}</span>
         <motion.button
@@ -709,6 +712,9 @@ export default function LiveIntelDashboard() {
   const [rssLoading, setRssLoading] = useState(true)
   const managerRef = useRef<AgentManager | null>(null)
 
+  // Live data feeds (aircraft, fires, EONET, GDELT)
+  const liveData = useLiveData()
+
   // Fetch RSS feeds immediately for instant content
   useEffect(() => {
     fetch('/api/rss?feeds=bbc_me,aljazeera,times_israel,iran_intl,reuters_world,al_monitor,war_zone,breaking_defense&limit=40')
@@ -779,11 +785,13 @@ export default function LiveIntelDashboard() {
         totalItems={totalItems}
         modelsActive={modelsUsed.length || AI_MODELS.length}
         onRefresh={handleRefresh}
+        aircraftCount={liveData.aircraft.length}
+        fireCount={liveData.fires.length}
       />
 
       {/* 3D Globe — full background */}
       <div className="absolute inset-0 z-[1]">
-        <Globe3D intelItems={allItems} onSelectEvent={setSelectedEvent} selectedEvent={selectedEvent} />
+        <Globe3D intelItems={allItems} onSelectEvent={setSelectedEvent} selectedEvent={selectedEvent} aircraft={liveData.aircraft} fires={liveData.fires} />
       </div>
 
       {/* ── Left Panel: Intel Feed ── */}

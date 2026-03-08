@@ -195,3 +195,89 @@ export interface ConflictArc {
   label: string
   stroke: number
 }
+
+// ============================================================
+// Phase 3: Real Data Integration Types
+// ============================================================
+
+// ── OpenSky Aircraft ──
+export interface AircraftPosition {
+  icao24: string
+  callsign: string
+  originCountry: string
+  lat: number
+  lng: number
+  altitude: number       // meters
+  velocity: number       // m/s
+  heading: number        // degrees
+  onGround: boolean
+  lastContact: number
+  category: 'military' | 'government' | 'civilian' | 'unknown'
+}
+
+// ── NASA FIRMS Fire/Hotspot ──
+export interface FireHotspot {
+  lat: number
+  lng: number
+  brightness: number
+  scan: number
+  track: number
+  acqDate: string
+  acqTime: string
+  satellite: string
+  confidence: string | number
+  frp: number            // fire radiative power in MW
+  dayNight: 'D' | 'N'
+  region?: string
+}
+
+// ── NASA EONET Natural Event ──
+export interface NaturalEvent {
+  id: string
+  title: string
+  description: string
+  link: string
+  categories: { id: string; title: string }[]
+  sources: { id: string; url: string }[]
+  geometry: { date: string; type: string; coordinates: [number, number] }[]
+  closed: string | null
+}
+
+// ── GDELT Event ──
+export interface GDELTEvent {
+  globaleventid: string
+  dateadded: string
+  actor1name: string
+  actor2name: string
+  actor1countrycode: string
+  actor2countrycode: string
+  eventcode: string
+  goldsteinscale: number   // -10 to +10 conflict scale
+  nummentions: number
+  avgtone: number
+  lat: number
+  lng: number
+  sourceurl: string
+}
+
+// ── Internet Disruption (Cloudflare Radar style) ──
+export interface InternetDisruption {
+  country: string
+  countryCode: string
+  startTime: string
+  endTime?: string
+  severity: 'partial' | 'major' | 'total'
+  asn?: number
+  asnName?: string
+  scope: string
+}
+
+// ── Live Data State (aggregated) ──
+export interface LiveDataState {
+  aircraft: AircraftPosition[]
+  fires: FireHotspot[]
+  events: NaturalEvent[]
+  gdelt: GDELTEvent[]
+  disruptions: InternetDisruption[]
+  lastUpdated: Record<string, number>
+}
