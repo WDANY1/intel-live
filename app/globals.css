@@ -205,4 +205,65 @@ input:focus, button:focus-visible {
     border-top-color: var(--accent);
     animation: spin 1s linear infinite;
   }
+
+  /* Live data status indicator */
+  .live-dot {
+    @apply inline-block rounded-full;
+    width: 6px;
+    height: 6px;
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+    animation: pulse 2s ease infinite;
+  }
+
+  .live-dot--error {
+    background: var(--alert);
+    box-shadow: 0 0 8px var(--alert);
+  }
+
+  /* Cinematic scanline effect */
+  .scanline-overlay {
+    @apply fixed inset-0 pointer-events-none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,229,255,0.008) 2px,
+      rgba(0,229,255,0.008) 4px
+    );
+    z-index: 9999;
+  }
+
+  /* Enhanced glass card with hover glow */
+  .glass-card-hover {
+    @apply backdrop-blur-md border border-white/5 transition-all duration-200;
+    background: rgba(18, 24, 33, 0.88);
+    border-radius: var(--radius-sm);
+  }
+  .glass-card-hover:hover {
+    background: rgba(18, 24, 33, 0.95);
+    border-color: rgba(0, 229, 255, 0.15);
+    box-shadow: 0 0 20px rgba(0, 229, 255, 0.05), inset 0 0 30px rgba(0, 229, 255, 0.02);
+  }
+}
+
+/* ══════════════════════════════════════════════════════
+   MOBILE RESPONSIVE
+   ══════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  html { font-size: 13px; }
+
+  /* Stack panels vertically on mobile */
+  .mobile-stack {
+    flex-direction: column !important;
+  }
+
+  /* Hide particles on mobile for performance */
+  .floating-particles {
+    display: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  html { font-size: 12px; }
 }

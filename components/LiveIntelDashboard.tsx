@@ -94,9 +94,9 @@ function FloatingParticles() {
 
 // ── Top Navigation Bar ──
 function TopBar({
-  status, cycle, totalItems, modelsActive, onRefresh, aircraftCount, fireCount,
+  status, cycle, totalItems, modelsActive, onRefresh, aircraftCount, fireCount, sseConnected,
 }: {
-  status: string; cycle: number; totalItems: number; modelsActive: number; onRefresh: () => void; aircraftCount?: number; fireCount?: number
+  status: string; cycle: number; totalItems: number; modelsActive: number; onRefresh: () => void; aircraftCount?: number; fireCount?: number; sseConnected?: boolean
 }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => {
@@ -129,7 +129,8 @@ function TopBar({
         <span style={{ fontFamily: 'var(--display)', fontSize: '0.85rem', fontWeight: 700, letterSpacing: 5, color: '#fff' }}>
           INTEL<span style={{ color: 'var(--accent)' }}>LIVE</span>
         </span>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'var(--text-dim)', letterSpacing: 2 }}>v9</span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'var(--text-dim)', letterSpacing: 2 }}>v10</span>
+        {sseConnected && <span className="live-dot" title="SSE Connected" />}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, fontFamily: 'var(--mono)', fontSize: '0.6rem', color: 'var(--text-muted)', letterSpacing: 1 }}>
@@ -789,12 +790,27 @@ export default function LiveIntelDashboard() {
   const selectedKey = selectedEvent ? `${selectedEvent.agentId}-${selectedEvent.headline}` : null
   const isScanning = Object.values(agentStatuses).some((s) => s?.status === 'running')
 
-  const leftPanelW = leftOpen ? 420 : 36
-  const rightPanelW = rightOpen ? 300 : 36
+  // Responsive: auto-collapse panels on small screens
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => {
+      const mobile = window.innerWidth < 768
+      setIsMobile(mobile)
+      if (mobile) { setLeftOpen(false); setRightOpen(false) }
+    }
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  const leftPanelW = leftOpen ? (isMobile ? Math.min(window.innerWidth * 0.85, 380) : 420) : 36
+  const rightPanelW = rightOpen ? (isMobile ? Math.min(window.innerWidth * 0.85, 300) : 300) : 36
 
   return (
     <div className="w-screen h-screen overflow-hidden relative bg-[#060A0F]">
       <FloatingParticles />
+      {/* Cinematic scanline overlay */}
+      <div className="scanline-overlay" />
 
       <TopBar
         status={isScanning ? 'running' : 'idle'}
@@ -804,6 +820,7 @@ export default function LiveIntelDashboard() {
         onRefresh={handleRefresh}
         aircraftCount={liveData.aircraft.length}
         fireCount={liveData.fires.length}
+        sseConnected={sseConnected}
       />
 
       {/* 3D Globe — full background */}
