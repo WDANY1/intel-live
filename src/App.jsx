@@ -1,6 +1,5 @@
-import { useState, Component } from "react";
+import { Component } from "react";
 import LiveIntelDashboard from "./LiveIntelDashboard";
-import LandingPage from "./LandingPage";
 
 // Global error boundary — prevents white screen of death
 class ErrorBoundary extends Component {
@@ -39,15 +38,9 @@ class ErrorBoundary extends Component {
 }
 
 export default function App() {
-  const [entered, setEntered] = useState(false);
-
   return (
     <ErrorBoundary>
-      {entered ? (
-        <LiveIntelDashboard />
-      ) : (
-        <LandingPage onEnter={() => setEntered(true)} />
-      )}
+      <LiveIntelDashboard />
     </ErrorBoundary>
   );
 }
