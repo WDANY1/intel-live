@@ -108,13 +108,19 @@ async function runAgent(
 
 export async function runAllAgents(
   apiKey: string,
-  onAgentProgress?: (p: AgentProgress) => void
+  onAgentProgress?: (p: AgentProgress) => void,
+  onPartialResults?: (results: IntelMap) => void
 ): Promise<IntelMap> {
   const allResults: IntelMap = {}
 
+  // Run all agents in parallel, emit partial results as each completes
   const promises = AGENTS.map(async (agent) => {
     const items = await runAgent(apiKey, agent, onAgentProgress)
     allResults[agent.id] = items
+    // Emit partial results so UI updates immediately per agent
+    if (items.length > 0 && onPartialResults) {
+      onPartialResults({ ...allResults })
+    }
   })
   await Promise.allSettled(promises)
   return allResults
@@ -251,14 +257,31 @@ export class AgentManager {
     this.log(`Ciclul #${this.cycleCount} — ${AI_MODELS.length} modele AI active: ${modelList}`, 'system')
 
     try {
-      const results = await runAllAgents(this.apiKey, (progress) => {
-        this.onAgentStatus?.(progress)
-        if (progress.status === 'done') {
-          this.log(`${progress.agentId.toUpperCase()}: ${progress.count} rapoarte — ${progress.message}`, 'success')
-        } else if (progress.status === 'error') {
-          this.log(`${progress.agentId.toUpperCase()}: EROARE — ${progress.message}`, 'error')
+      const results = await runAllAgents(
+        this.apiKey,
+        (progress) => {
+          this.onAgentStatus?.(progress)
+          if (progress.status === 'done') {
+            this.log(`${progress.agentId.toUpperCase()}: ${progress.count} rapoarte — ${progress.message}`, 'success')
+          } else if (progress.status === 'error') {
+            this.log(`${progress.agentId.toUpperCase()}: EROARE — ${progress.message}`, 'error')
+          }
+        },
+        // Emit partial results — UI updates as each agent finishes
+        (partialResults) => {
+          const modelsUsed = [
+            ...new Set(Object.values(partialResults).flat().map((i) => i?.aiModel).filter(Boolean)),
+          ] as string[]
+          this.onUpdate?.({
+            intel: partialResults,
+            analysis: null,
+            breaking: [],
+            timestamp: Date.now(),
+            cycle: this.cycleCount,
+            modelsUsed,
+          })
         }
-      })
+      )
 
       const totalItems = Object.values(results).flat().length
       let analysisResult: AnalysisResult | null = null

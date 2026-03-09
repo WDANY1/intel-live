@@ -27,7 +27,23 @@ import type {
 } from '@/lib/types'
 
 // Load Globe dynamically (WebGL, browser-only)
-const Globe3D = dynamic(() => import('./Globe3D'), { ssr: false })
+const Globe3D = dynamic(() => import('./Globe3D'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, #0a1628 0%, #060A0F 70%)' }}>
+      <div className="text-center">
+        <div className="w-12 h-12 rounded-full border-2 border-[#00E5FF]/30 mx-auto mb-4"
+          style={{ borderTopColor: '#00E5FF', animation: 'spin 1s linear infinite', boxShadow: '0 0 20px rgba(0,229,255,0.2)' }} />
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '0.75rem', color: '#00E5FF', letterSpacing: 4, marginBottom: 6 }}>
+          INITIALIZING GLOBE
+        </div>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: 'rgba(0,229,255,0.3)', letterSpacing: 2 }}>
+          LOADING 3D ENGINE...
+        </div>
+      </div>
+    </div>
+  ),
+})
 
 // ── Utility ──
 function getTimeAgo(date: Date): string {
@@ -274,12 +290,15 @@ function RSSCard({ article, index }: { article: RSSArticle; index: number }) {
   const timeAgo = article.pubDate ? getTimeAgo(new Date(article.pubDate)) : ''
 
   return (
-    <motion.div
+    <motion.a
+      href={article.link}
+      target="_blank"
+      rel="noopener noreferrer"
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.12, delay: Math.min(index * 0.01, 0.2) }}
-      style={{ padding: '8px 12px', borderLeft: `2px solid ${sev.color}`, borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.15s' }}
-      whileHover={{ backgroundColor: 'rgba(255,255,255,0.025)' }}
+      style={{ display: 'block', padding: '8px 12px', borderLeft: `2px solid ${sev.color}`, borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.15s', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
+      whileHover={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
         <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', fontWeight: 700, color: '#06b6d4', letterSpacing: 1 }}>RSS</span>
@@ -301,10 +320,11 @@ function RSSCard({ article, index }: { article: RSSArticle; index: number }) {
         <img src={article.image} alt="" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 4, marginTop: 4, opacity: 0.8 }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
       )}
-      <div style={{ marginTop: 2 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
         <span style={{ fontFamily: 'var(--mono)', fontSize: '0.48rem', color: 'var(--text-muted)' }}>{article.source}</span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.42rem', color: 'var(--accent)', opacity: 0.5, marginLeft: 'auto' }}>↗ READ</span>
       </div>
-    </motion.div>
+    </motion.a>
   )
 }
 
@@ -318,6 +338,7 @@ function EventDetail({
 }) {
   const sev = SEVERITY_CONFIG[item.severity] || SEVERITY_CONFIG[3]
   const agent = AGENTS.find((a) => a.id === item.agentId)
+  const searchQuery = encodeURIComponent(item.headline)
 
   return (
     <motion.div
@@ -327,29 +348,39 @@ function EventDetail({
       transition={{ duration: 0.2 }}
       style={{
         position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-        background: 'rgba(6,10,15,0.95)', backdropFilter: 'blur(16px)', zIndex: 50,
+        background: 'rgba(6,10,15,0.97)', backdropFilter: 'blur(16px)', zIndex: 50,
         display: 'flex', flexDirection: 'column', overflow: 'auto',
       }}
     >
       <div style={{ padding: '12px 14px', borderBottom: `1px solid ${sev.color}20`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
             <SeverityBadge level={item.severity} />
             {agent && <span style={{ fontFamily: 'var(--mono)', fontSize: '0.6rem', color: agent.color }}>{agent.icon} {agent.fullName}</span>}
+            {item.time && <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: 'var(--text-dim)' }}>{item.time}</span>}
           </div>
           <div style={{ fontFamily: 'var(--display)', fontSize: '1rem', fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>
             {item.headline}
           </div>
         </div>
-        <button onClick={onClose} style={{ fontFamily: 'var(--mono)', fontSize: '1rem', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px 8px' }}>
+        <button onClick={onClose} style={{ fontFamily: 'var(--mono)', fontSize: '1.2rem', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px 8px', flexShrink: 0 }}>
           &times;
         </button>
       </div>
+
+      {/* Image if available */}
+      {item.image && (
+        <div style={{ padding: '0 14px', marginTop: 8 }}>
+          <img src={item.image} alt="" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 6, border: '1px solid rgba(255,255,255,0.06)' }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+        </div>
+      )}
 
       <div style={{ padding: '12px 14px', flex: 1 }}>
         <p style={{ fontFamily: 'var(--sans)', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 14 }}>
           {item.summary}
         </p>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 14 }}>
           {[
             { label: 'SOURCE', value: item.source },
@@ -362,6 +393,42 @@ function EventDetail({
               <div style={{ fontFamily: 'var(--mono)', fontSize: '0.68rem', color: 'var(--text-primary)' }}>{m.value}</div>
             </div>
           ))}
+        </div>
+
+        {/* Direct source link */}
+        {item.link && (
+          <a href={item.link} target="_blank" rel="noopener noreferrer" style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            width: '100%', padding: '10px', marginBottom: 10, borderRadius: 5,
+            background: 'rgba(0,229,255,0.06)', border: '1px solid rgba(0,229,255,0.2)',
+            fontFamily: 'var(--mono)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: 2,
+            color: 'var(--accent)', textDecoration: 'none', cursor: 'pointer',
+          }}>
+            READ FULL ARTICLE ↗
+          </a>
+        )}
+
+        {/* Quick search links to find the full story */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'var(--text-dim)', letterSpacing: 2, marginBottom: 6 }}>FIND FULL STORY</div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {[
+              { label: 'Google News', url: `https://news.google.com/search?q=${searchQuery}`, color: '#4285f4' },
+              { label: 'X / Twitter', url: `https://x.com/search?q=${searchQuery}&f=live`, color: '#1da1f2' },
+              { label: 'YouTube', url: `https://www.youtube.com/results?search_query=${searchQuery}&sp=CAI%253D`, color: '#ff0000' },
+              { label: 'Reuters', url: `https://www.reuters.com/search/news?query=${searchQuery}`, color: '#ff8000' },
+              { label: 'Al Jazeera', url: `https://www.aljazeera.com/search/${searchQuery}`, color: '#d2a44e' },
+            ].map((link) => (
+              <a key={link.label} href={link.url} target="_blank" rel="noopener noreferrer" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 8px',
+                borderRadius: 4, fontSize: '0.55rem', fontFamily: 'var(--mono)', fontWeight: 600,
+                color: link.color, background: `${link.color}10`, border: `1px solid ${link.color}25`,
+                textDecoration: 'none', cursor: 'pointer', letterSpacing: 0.5,
+              }}>
+                {link.label} ↗
+              </a>
+            ))}
+          </div>
         </div>
 
         {!verification && (
@@ -391,7 +458,7 @@ function EventDetail({
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             style={{
-              padding: 10, borderRadius: 5,
+              padding: 10, borderRadius: 5, marginTop: 10,
               border: `1px solid ${(verification as VerificationResult).verified ? '#30D15830' : '#FF3B3030'}`,
               background: (verification as VerificationResult).verified ? 'rgba(48,209,88,0.04)' : 'rgba(255,59,48,0.04)',
             }}

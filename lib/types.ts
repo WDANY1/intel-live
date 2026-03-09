@@ -26,6 +26,7 @@ export interface IntelItem {
   aiModel: string
   aiModelName: string
   image?: string
+  link?: string
 }
 
 // ── Deep analysis report ──

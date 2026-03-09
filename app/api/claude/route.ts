@@ -201,10 +201,30 @@ export async function POST(request: NextRequest) {
     const hfKey = process.env.HF_API_KEY
 
     let text = '', usedModel = '', lastError = ''
+    const isOpenRouterModel = OPENROUTER_MODELS.includes(requestedModel) || requestedModel?.includes(':free')
 
-    // ═══ Strategy 1: Groq (fastest, free tier) ═══
+    // ═══ Strategy 1: OpenRouter FIRST (agents request specific free models) ═══
+    if (!text && openrouterKey && isOpenRouterModel) {
+      const tryOrder = [requestedModel, ...OPENROUTER_MODELS.filter((m) => m !== requestedModel).slice(0, 2)]
+      for (const tryModel of tryOrder) {
+        try {
+          const response = await callOpenRouter(openrouterKey, messages, tryModel)
+          const data = await response.json()
+          if (response.ok && extractOpenAIText(data)) {
+            text = extractOpenAIText(data)
+            usedModel = tryModel
+            break
+          }
+          lastError = data.error?.message || `OpenRouter ${response.status}`
+          if (response.status === 429) { await sleep(200); continue }
+          if (!RETRY_CODES.includes(response.status)) break
+        } catch (e: any) { lastError = e.message }
+      }
+    }
+
+    // ═══ Strategy 2: Groq (fastest, free tier) ═══
     if (!text && groqKey) {
-      for (const model of GROQ_MODELS) {
+      for (const model of GROQ_MODELS.slice(0, 2)) {
         try {
           const response = await callGroq(groqKey, messages, model)
           const data = await response.json()
@@ -214,13 +234,13 @@ export async function POST(request: NextRequest) {
             break
           }
           lastError = data.error?.message || `Groq ${response.status}`
-          if (response.status === 429) { await sleep(300); continue }
+          if (response.status === 429) { await sleep(200); continue }
           if (!RETRY_CODES.includes(response.status)) break
         } catch (e: any) { lastError = e.message }
       }
     }
 
-    // ═══ Strategy 2: Cerebras (ultra-fast, free tier) ═══
+    // ═══ Strategy 3: Cerebras (ultra-fast, free tier) ═══
     if (!text && cerebrasKey) {
       for (const model of CEREBRAS_MODELS) {
         try {
@@ -232,25 +252,7 @@ export async function POST(request: NextRequest) {
             break
           }
           lastError = data.error?.message || `Cerebras ${response.status}`
-          if (response.status === 429) { await sleep(300); continue }
-          if (!RETRY_CODES.includes(response.status)) break
-        } catch (e: any) { lastError = e.message }
-      }
-    }
-
-    // ═══ Strategy 3: Mistral AI ═══
-    if (!text && mistralKey) {
-      for (const model of MISTRAL_MODELS) {
-        try {
-          const response = await callMistral(mistralKey, messages, model)
-          const data = await response.json()
-          if (response.ok && extractOpenAIText(data)) {
-            text = extractOpenAIText(data)
-            usedModel = `mistral/${model}`
-            break
-          }
-          lastError = data.error?.message || `Mistral ${response.status}`
-          if (response.status === 429) { await sleep(300); continue }
+          if (response.status === 429) { await sleep(200); continue }
           if (!RETRY_CODES.includes(response.status)) break
         } catch (e: any) { lastError = e.message }
       }
@@ -270,12 +272,27 @@ export async function POST(request: NextRequest) {
       } catch (e: any) { lastError = e.message }
     }
 
-    // ═══ Strategy 5: OpenRouter (many free models, fallback) ═══
-    if (!text && openrouterKey) {
-      const model = OPENROUTER_MODELS.includes(requestedModel) ? requestedModel : OPENROUTER_MODELS[0]
-      const tryOrder = [model, ...OPENROUTER_MODELS.filter((m) => m !== model)]
+    // ═══ Strategy 5: Mistral AI ═══
+    if (!text && mistralKey) {
+      for (const model of MISTRAL_MODELS) {
+        try {
+          const response = await callMistral(mistralKey, messages, model)
+          const data = await response.json()
+          if (response.ok && extractOpenAIText(data)) {
+            text = extractOpenAIText(data)
+            usedModel = `mistral/${model}`
+            break
+          }
+          lastError = data.error?.message || `Mistral ${response.status}`
+          if (response.status === 429) { await sleep(200); continue }
+          if (!RETRY_CODES.includes(response.status)) break
+        } catch (e: any) { lastError = e.message }
+      }
+    }
 
-      for (const tryModel of tryOrder) {
+    // ═══ Strategy 6: OpenRouter fallback (if not tried above) ═══
+    if (!text && openrouterKey && !isOpenRouterModel) {
+      for (const tryModel of OPENROUTER_MODELS.slice(0, 3)) {
         try {
           const response = await callOpenRouter(openrouterKey, messages, tryModel)
           const data = await response.json()
@@ -285,13 +302,13 @@ export async function POST(request: NextRequest) {
             break
           }
           lastError = data.error?.message || `OpenRouter ${response.status}`
-          if (response.status === 429) { await sleep(300); continue }
+          if (response.status === 429) { await sleep(200); continue }
           if (!RETRY_CODES.includes(response.status)) break
         } catch (e: any) { lastError = e.message }
       }
     }
 
-    // ═══ Strategy 6: HuggingFace (last resort) ═══
+    // ═══ Strategy 7: HuggingFace (last resort) ═══
     if (!text && hfKey) {
       for (const model of HF_MODELS) {
         try {
@@ -306,7 +323,7 @@ export async function POST(request: NextRequest) {
             }
           }
           lastError = data.error || `HuggingFace ${response.status}`
-          if (response.status === 503) { await sleep(1000); continue }
+          if (response.status === 503) { await sleep(500); continue }
           if (!RETRY_CODES.includes(response.status)) break
         } catch (e: any) { lastError = e.message }
       }

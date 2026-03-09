@@ -131,6 +131,7 @@ export function extractIntelFromRSS(articles: RSSArticle[]): IntelItem[] {
       aiModel: 'extraction',
       aiModelName: 'RSS Extraction',
       image: article.image || undefined,
+      link: article.link || undefined,
     })
   }
 
