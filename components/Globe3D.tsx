@@ -308,14 +308,14 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
       const Globe = GlobeModule.default as any
 
       const globe = Globe()
-        // NASA Blue Marble + topology bump
+        // NASA Blue Marble + topology bump + night texture
         .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
         .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
         .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
-        // Atmosphere glow — signature feature
+        // Atmosphere glow — thicker, more cinematic
         .showAtmosphere(true)
-        .atmosphereColor('#1a6fa8')
-        .atmosphereAltitude(0.22)
+        .atmosphereColor('#0077ff')
+        .atmosphereAltitude(0.25)
         .width(mountDiv.clientWidth)
         .height(mountDiv.clientHeight)
         .pointOfView({ lat: 28, lng: 46, altitude: 2.0 }, 0)
@@ -359,54 +359,125 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
         .labelColor((d: StrategicBase) => d.color)
         .labelResolution(2)
         .labelAltitude(0.015)
-        // Event markers
+        // Event markers — multi-layer pulsing dots with rich tooltips
         .htmlElementsData([])
         .htmlElement((d: GlobeEventPoint) => {
+          const sev = d.item?.severity || 3
+          const agent = d.item?.agentId || 'osint'
+          const outerSz = 20 + sev * 6 // outer pulse ring
+          const innerSz = 6 + sev * 2   // inner solid dot
+          const agentIcons: Record<string, string> = {
+            sigint: '📡', osint: '🔍', humint: '👤', geoint: '🛰️',
+            econint: '📊', proxy: '🎯', diplo: '🏛️',
+          }
+
           const el = document.createElement('div')
-          const sz = 8 + (d.item?.severity || 3) * 4
           el.style.cssText = `
-            width:${sz}px;height:${sz}px;border-radius:50%;
-            background:radial-gradient(circle,${d.color} 0%,${d.color}88 40%,transparent 70%);
-            box-shadow:0 0 ${(d.item?.severity || 3) * 5}px ${d.color},0 0 ${(d.item?.severity || 3) * 10}px ${d.color}44;
-            cursor:pointer;transition:transform 0.2s;
-            animation:pulse 2s ease infinite;
-            border:1px solid ${d.color}88;position:relative;
+            position:relative;width:${outerSz}px;height:${outerSz}px;
+            cursor:pointer;transition:transform 0.2s ease;
           `
+
+          // Outer pulsing ring
+          const pulseRing = document.createElement('div')
+          pulseRing.style.cssText = `
+            position:absolute;inset:0;border-radius:50%;
+            border:1.5px solid ${d.color};opacity:0.4;
+            animation:globePulse 2s ease-in-out infinite;
+          `
+          el.appendChild(pulseRing)
+
+          // Second pulse ring (staggered)
+          if (sev >= 4) {
+            const pulseRing2 = document.createElement('div')
+            pulseRing2.style.cssText = `
+              position:absolute;inset:-4px;border-radius:50%;
+              border:1px solid ${d.color};opacity:0.2;
+              animation:globePulse 2s ease-in-out 0.5s infinite;
+            `
+            el.appendChild(pulseRing2)
+          }
+
+          // Glow background
+          const glow = document.createElement('div')
+          glow.style.cssText = `
+            position:absolute;inset:0;border-radius:50%;
+            background:radial-gradient(circle,${d.color}44 0%,${d.color}11 50%,transparent 70%);
+          `
+          el.appendChild(glow)
+
+          // Inner solid dot
+          const dot = document.createElement('div')
+          const dotOffset = (outerSz - innerSz) / 2
+          dot.style.cssText = `
+            position:absolute;left:${dotOffset}px;top:${dotOffset}px;
+            width:${innerSz}px;height:${innerSz}px;border-radius:50%;
+            background:${d.color};box-shadow:0 0 ${sev * 3}px ${d.color};
+          `
+          el.appendChild(dot)
+
+          // Rich tooltip card — shows on hover
           const tip = document.createElement('div')
+          const sevLabels = ['', 'LOW', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+          const sevColors = ['', '#30D158', '#30D158', '#FFD60A', '#FFB020', '#FF3B30']
           tip.style.cssText = `
-            position:absolute;bottom:${sz + 5}px;left:50%;transform:translateX(-50%);
-            background:rgba(6,10,15,0.93);border:1px solid ${d.color}44;border-radius:4px;
-            padding:4px 8px;white-space:nowrap;pointer-events:none;
-            font-family:'JetBrains Mono',monospace;font-size:9px;color:#e2e8f0;
-            opacity:0;transition:opacity 0.2s;backdrop-filter:blur(10px);
-            max-width:220px;overflow:hidden;text-overflow:ellipsis;
+            position:absolute;bottom:${outerSz + 8}px;left:50%;transform:translateX(-50%);
+            background:rgba(6,10,15,0.95);border:1px solid ${d.color}55;border-radius:6px;
+            padding:8px 10px;pointer-events:none;z-index:100;
+            opacity:0;transition:opacity 0.15s;backdrop-filter:blur(12px);
+            min-width:200px;max-width:280px;box-shadow:0 4px 20px rgba(0,0,0,0.6);
           `
-          tip.textContent = d.label || ''
+          tip.innerHTML = `
+            <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">
+              <span style="font-size:10px">${agentIcons[agent] || '⚡'}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;color:${d.color};letter-spacing:1px;">${(agent || 'OSINT').toUpperCase()}</span>
+              <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:7px;font-weight:700;color:${sevColors[sev]};padding:1px 4px;border-radius:2px;background:${sevColors[sev]}15;border:1px solid ${sevColors[sev]}30;">${sevLabels[sev]}</span>
+            </div>
+            <div style="font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:#e2e8f0;line-height:1.3;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${d.item?.headline || d.label || ''}</div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              ${d.item?.source ? `<span style="font-family:'JetBrains Mono',monospace;font-size:7px;color:rgba(255,255,255,0.4);">${d.item.source}</span>` : ''}
+              ${d.item?.time ? `<span style="font-family:'JetBrains Mono',monospace;font-size:7px;color:rgba(0,229,255,0.5);">${d.item.time}</span>` : ''}
+              ${d.item?.location ? `<span style="font-family:'JetBrains Mono',monospace;font-size:7px;color:rgba(255,255,255,0.3);">📍 ${d.item.location}</span>` : ''}
+            </div>
+            <div style="margin-top:4px;font-family:'JetBrains Mono',monospace;font-size:6px;color:rgba(0,229,255,0.3);letter-spacing:1px;">CLICK FOR DETAILS</div>
+          `
           el.appendChild(tip)
+
           el.onclick = () => onSelectEvent?.(d.item)
-          el.onmouseenter = () => { el.style.transform = 'scale(1.8)'; tip.style.opacity = '1' }
-          el.onmouseleave = () => { el.style.transform = 'scale(1)'; tip.style.opacity = '0' }
+          el.onmouseenter = () => {
+            el.style.transform = 'scale(1.5)'
+            tip.style.opacity = '1'
+          }
+          el.onmouseleave = () => {
+            el.style.transform = 'scale(1)'
+            tip.style.opacity = '0'
+          }
           return el
         })
         .htmlAltitude((d: GlobeEventPoint) => d.altitude || 0.015)(mountDiv)
 
       globeRef.current = globe
 
-      // Enhanced globe material
+      // Enhanced globe material — cinematic look
       const globeMaterial = globe.globeMaterial()
-      globeMaterial.bumpScale = 6
-      globeMaterial.emissive = new THREE.Color('#061833')
-      globeMaterial.emissiveIntensity = 0.1
-      globeMaterial.shininess = 30
+      globeMaterial.bumpScale = 8
+      globeMaterial.emissive = new THREE.Color('#041628')
+      globeMaterial.emissiveIntensity = 0.15
+      globeMaterial.shininess = 40
+      globeMaterial.specular = new THREE.Color('#1a3a5c')
 
       const scene = globe.scene()
 
-      // Lighting
-      scene.add(new THREE.AmbientLight(0x3355aa, 0.7))
-      const sunLight = new THREE.DirectionalLight(0xfff5e0, 1.5)
+      // Cinematic lighting setup
+      scene.add(new THREE.AmbientLight(0x224488, 0.6))
+      const sunLight = new THREE.DirectionalLight(0xfff0d0, 1.8)
       sunLight.position.set(5, 3, 5)
       scene.add(sunLight)
       sunLightRef.current = sunLight
+
+      // Subtle blue rim light from behind
+      const rimLight = new THREE.DirectionalLight(0x0055ff, 0.3)
+      rimLight.position.set(-3, -1, -3)
+      scene.add(rimLight)
 
       // Cloud layer (rotates slowly)
       const cloudGeo = new THREE.SphereGeometry(102.2, 64, 64)
