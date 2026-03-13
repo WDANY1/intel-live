@@ -489,7 +489,7 @@ function TelemetryPanel({
         {[
           { label: 'SIGNALS', value: String(totalSig), color: '#00E5FF' },
           { label: 'CRITICAL', value: String(critCount), color: critCount > 0 ? '#FF3040' : '#00E676' },
-          { label: 'AI MODELS', value: String(modelsUsed.length || AI_MODELS.length), color: '#00E5FF' },
+          { label: 'RSS SURSE', value: String(modelsUsed.length || 21), color: '#00E5FF' },
           { label: 'CYCLE', value: `#${cycle}`, color: 'rgba(255,255,255,0.5)' },
         ].map((stat, i) => (
           <div key={i} style={{
@@ -828,7 +828,7 @@ function EventDetailModal({ item, onClose }: { item: IntelItem; onClose: () => v
             { label: 'TIME', value: item.time || (item.fetchedAt ? timeAgo(item.fetchedAt) : '--'), color: '#00E5FF' },
             { label: 'LOCATION', value: item.location || 'Unknown', color: 'rgba(255,255,255,0.5)' },
             { label: 'VERIFIED', value: item.verified ? 'YES' : 'UNVERIFIED', color: item.verified ? '#00E676' : '#FFB020' },
-            { label: 'AI MODEL', value: item.aiModelName?.slice(0, 20) || '--', color: 'rgba(255,255,255,0.4)' },
+            { label: 'EXTRAS DIN', value: item.aiModelName?.slice(0, 20) || 'RSS Feed', color: 'rgba(255,255,255,0.4)' },
           ].map((m, i) => (
             <div key={i} style={{ padding: '7px 8px', background: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.04)' }}>
               <div style={{ fontFamily: 'var(--mono)', fontSize: '0.35rem', color: 'rgba(255,255,255,0.3)', letterSpacing: 1.5, marginBottom: 3 }}>{m.label}</div>
@@ -838,9 +838,22 @@ function EventDetailModal({ item, onClose }: { item: IntelItem; onClose: () => v
         </div>
 
         {/* Severity bar */}
-        <div style={{ height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginBottom: item.link ? 10 : 0 }}>
           <div style={{ height: '100%', width: `${(item.severity / 5) * 100}%`, background: st.color, boxShadow: `0 0 8px ${st.color}` }} />
         </div>
+
+        {/* Link to original article */}
+        {item.link && (
+          <a href={item.link} target="_blank" rel="noopener noreferrer" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10,
+            fontFamily: 'var(--mono)', fontSize: '0.45rem', letterSpacing: 1.5,
+            color: '#00E5FF', textDecoration: 'none',
+            padding: '4px 10px', border: '1px solid rgba(0,229,255,0.2)',
+            borderRadius: 3, background: 'rgba(0,229,255,0.05)',
+          }}>
+            ↗ CITEȘTE ARTICOLUL ORIGINAL ({item.source})
+          </a>
+        )}
       </motion.div>
     </motion.div>
   )
@@ -1021,39 +1034,51 @@ function SetupModal({ onConfirm }: { onConfirm: (key: string) => void }) {
   const [key, setKey] = useState('')
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(2,5,10,0.98)', backdropFilter: 'blur(8px)',
+      position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(2,5,10,0.97)', backdropFilter: 'blur(8px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      <div style={{ textAlign: 'center', maxWidth: 440, padding: '0 20px' }}>
+      <div style={{ textAlign: 'center', maxWidth: 480, padding: '0 20px' }}>
         <div style={{ fontFamily: 'var(--display)', fontSize: '1.2rem', fontWeight: 800, letterSpacing: 4, color: '#fff', marginBottom: 6 }}>
           INTEL<span style={{ color: '#00E5FF' }}>-LIVE</span>
         </div>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'rgba(0,229,255,0.4)', letterSpacing: 3, marginBottom: 24 }}>V5.0.2 — INTELLIGENCE COMMAND SYSTEM</div>
-        <div style={{ fontFamily: 'var(--sans)', fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: 20, lineHeight: 1.6 }}>
-          Enter your OpenRouter API key to activate AI agents.<br />
-          Keys are stored locally and never sent to our servers.
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'rgba(0,229,255,0.4)', letterSpacing: 3, marginBottom: 20 }}>V5.0.2 — INTELLIGENCE COMMAND SYSTEM</div>
+
+        <div style={{ background: 'rgba(0,229,255,0.04)', border: '1px solid rgba(0,229,255,0.12)', borderRadius: 6, padding: '12px 16px', marginBottom: 16, textAlign: 'left' }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: '#00E5FF', letterSpacing: 2, marginBottom: 6 }}>SURSE DE DATE REALE</div>
+          <div style={{ fontFamily: 'var(--sans)', fontSize: '0.62rem', color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>
+            ✓ BBC, Reuters, AP, Al Jazeera, Times of Israel<br />
+            ✓ Iran International, Defense One, The War Zone<br />
+            ✓ Middle East Eye, Breaking Defense, Sky News<br />
+            ✓ GDELT Global Events · OpenSky Aircraft · NASA FIRMS
+          </div>
         </div>
+
+        <div style={{ fontFamily: 'var(--sans)', fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', marginBottom: 16, lineHeight: 1.5 }}>
+          Sistemul pornește imediat cu date reale din RSS.<br/>
+          API key OpenRouter este opțional — doar pentru analiza strategică AI.
+        </div>
+
         <input
           value={key}
           onChange={e => setKey(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && key.trim() && onConfirm(key.trim())}
-          placeholder="sk-or-v1-..."
+          onKeyDown={e => e.key === 'Enter' && onConfirm(key.trim() || 'no-key')}
+          placeholder="sk-or-v1-... (opțional — pentru analiza AI)"
           style={{
-            width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(0,229,255,0.2)',
+            width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(0,229,255,0.15)',
             borderRadius: 4, padding: '10px 14px', fontFamily: 'var(--mono)', fontSize: '0.6rem',
-            color: '#fff', outline: 'none', marginBottom: 12,
+            color: '#fff', outline: 'none', marginBottom: 10,
           }}
         />
         <div style={{ display: 'flex', gap: 8 }}>
           <button
-            onClick={() => key.trim() && onConfirm(key.trim())}
+            onClick={() => onConfirm(key.trim() || 'no-key')}
             style={{
               flex: 1, fontFamily: 'var(--mono)', fontSize: '0.55rem', letterSpacing: 2, fontWeight: 700,
               color: '#00E5FF', padding: '10px 14px', border: '1px solid rgba(0,229,255,0.35)',
               borderRadius: 4, background: 'rgba(0,229,255,0.08)', cursor: 'pointer',
             }}
           >
-            ESTABLISH UPLINK
+            PORNIRE SISTEM
           </button>
           <button
             onClick={() => onConfirm('server-side')}
@@ -1063,7 +1088,7 @@ function SetupModal({ onConfirm }: { onConfirm: (key: string) => void }) {
               borderRadius: 4, background: 'transparent', cursor: 'pointer',
             }}
           >
-            USE SERVER KEY
+            FĂRĂ AI (RSS ONLY)
           </button>
         </div>
       </div>
@@ -1084,22 +1109,25 @@ export default function LiveIntelDashboard() {
   const [showWebcams, setShowWebcams] = useState(false)
   const [agentsRunning, setAgentsRunning] = useState(false)
   const managerRef = useRef<AgentManager | null>(null)
-  const { aircraft, fires } = useLiveData()
+  const { aircraft, fires, extractedIntel } = useLiveData()
 
-  const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {
-    const entry: LogEntry = {
-      time: new Date().toLocaleTimeString('ro-RO'),
-      message: msg, type,
-    }
-    setState(prev => ({
-      ...prev,
-      logs: [...prev.logs.slice(-80), entry],
-    }))
-  }, [])
-
+  // Merge agent intel + RSS extracted intel, deduplicate by headline
   const allItems = useMemo(() => {
-    return Object.values(state.intel).flat().sort((a, b) => (b.fetchedAt || 0) - (a.fetchedAt || 0))
-  }, [state.intel])
+    const agentItems = Object.values(state.intel).flat()
+    const rssItems = extractedIntel || []
+
+    // Combine, deduplicate by headline
+    const seen = new Set<string>()
+    const combined: IntelItem[] = []
+    for (const item of [...agentItems, ...rssItems]) {
+      const key = item.headline.slice(0, 60).toLowerCase()
+      if (!seen.has(key)) {
+        seen.add(key)
+        combined.push(item)
+      }
+    }
+    return combined.sort((a, b) => (b.fetchedAt || 0) - (a.fetchedAt || 0))
+  }, [state.intel, extractedIntel])
 
   const criticalCount = useMemo(() => allItems.filter(i => i.severity >= 4).length, [allItems])
 
@@ -1144,7 +1172,7 @@ export default function LiveIntelDashboard() {
       }
     )
     managerRef.current = mgr
-    mgr.start(300)
+    mgr.start(180)  // RSS refresh every 3 minutes
     setAgentsRunning(true)
     setState(prev => ({ ...prev, status: 'running' }))
   }, [])
@@ -1173,12 +1201,13 @@ export default function LiveIntelDashboard() {
     }
   }, [state.apiKey, startAgents])
 
-  // Auto-start after setup
+  // Auto-start after setup — works with or without API key
+  // RSS data fetching doesn't need an API key
   useEffect(() => {
-    if (!showSetup && state.apiKey && !agentsRunning && !managerRef.current) {
-      startAgents(state.apiKey)
+    if (!showSetup && !agentsRunning && !managerRef.current) {
+      startAgents(state.apiKey || 'no-key')
     }
-  }, [showSetup, state.apiKey])
+  }, [showSetup])
 
   // Cleanup
   useEffect(() => () => { managerRef.current?.stop() }, [])
