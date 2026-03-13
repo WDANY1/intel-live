@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
-import { AGENTS, WEBCAM_FEEDS, NEWS_STREAMS, SEVERITY_CONFIG } from '@/lib/config'
+import { WEBCAM_FEEDS, NEWS_STREAMS, SEVERITY_CONFIG } from '@/lib/config'
 import { AgentManager } from '@/lib/agents'
 import { useLiveData } from '@/lib/useLiveData'
-import type { IntelItem, AgentStatusMap, IntelMap, LogEntry, AgentProgress } from '@/lib/types'
+import type { IntelItem, AgentStatusMap, LogEntry } from '@/lib/types'
 
 const Globe3D = dynamic(() => import('./Globe3D'), {
   ssr: false,
@@ -834,7 +834,6 @@ export default function LiveIntelDashboard() {
   const [totalScanned, setTotalScanned] = useState(0)
 
   const agentManagerRef = useRef<AgentManager | null>(null)
-  const globeRef = useRef<any>(null)
 
   const { aircraft, fires } = useLiveData()
 
