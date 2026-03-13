@@ -6,18 +6,18 @@ import type { IntelItem, StrategicBase, ConflictArc, GlobeEventPoint, AircraftPo
 
 // ── Severity config ──
 const SEVERITY_COLORS: Record<number, string> = {
-  5: '#FF3B30', 4: '#FFB020', 3: '#FFD60A', 2: '#30D158', 1: '#30D158',
+  5: '#FF3040', 4: '#FFB020', 3: '#FFD60A', 2: '#00E676', 1: '#00E676',
 }
 
 // ── Strategic bases ──
 const BASES: StrategicBase[] = [
-  { lat: 35.6892, lng: 51.389, name: 'Tehran', type: 'capital', color: '#FF3B30', size: 0.7, label: true },
-  { lat: 32.6546, lng: 51.668, name: 'Isfahan / Natanz', type: 'nuclear', color: '#FF3B30', size: 0.6, label: true },
-  { lat: 34.0048, lng: 51.4025, name: 'Fordow', type: 'nuclear', color: '#FF3B30', size: 0.5 },
-  { lat: 28.9784, lng: 50.836, name: 'Bushehr', type: 'nuclear', color: '#FF3B30', size: 0.5, label: true },
+  { lat: 35.6892, lng: 51.389, name: 'Tehran', type: 'capital', color: '#FF3040', size: 0.7, label: true },
+  { lat: 32.6546, lng: 51.668, name: 'Isfahan / Natanz', type: 'nuclear', color: '#FF3040', size: 0.6, label: true },
+  { lat: 34.0048, lng: 51.4025, name: 'Fordow', type: 'nuclear', color: '#FF3040', size: 0.5 },
+  { lat: 28.9784, lng: 50.836, name: 'Bushehr', type: 'nuclear', color: '#FF3040', size: 0.5, label: true },
   { lat: 31.7683, lng: 35.2137, name: 'Jerusalem', type: 'capital', color: '#3B82F6', size: 0.7, label: true },
   { lat: 32.0853, lng: 34.7818, name: 'Tel Aviv', type: 'command', color: '#3B82F6', size: 0.6, label: true },
-  { lat: 31.5017, lng: 34.4674, name: 'Gaza', type: 'conflict', color: '#FF3B30', size: 0.8, label: true },
+  { lat: 31.5017, lng: 34.4674, name: 'Gaza', type: 'conflict', color: '#FF3040', size: 0.8, label: true },
   { lat: 32.6625, lng: 35.1671, name: 'Palmachim AFB', type: 'military', color: '#3B82F6', size: 0.4 },
   { lat: 31.1341, lng: 35.0094, name: 'Nevatim AFB', type: 'military', color: '#3B82F6', size: 0.4 },
   { lat: 25.4111, lng: 51.226, name: 'Al Udeid AFB', type: 'us_base', color: '#60A5FA', size: 0.5, label: true },
@@ -30,12 +30,12 @@ const BASES: StrategicBase[] = [
   { lat: 26.5667, lng: 56.25, name: 'Strait of Hormuz', type: 'chokepoint', color: '#22D3EE', size: 0.7, label: true },
   { lat: 12.5833, lng: 43.1453, name: 'Bab el-Mandeb', type: 'chokepoint', color: '#22D3EE', size: 0.6, label: true },
   { lat: 30.425, lng: 32.3444, name: 'Suez Canal', type: 'chokepoint', color: '#22D3EE', size: 0.6, label: true },
-  { lat: 27.1832, lng: 56.2765, name: 'Bandar Abbas', type: 'naval', color: '#FF3B30', size: 0.5, label: true },
+  { lat: 27.1832, lng: 56.2765, name: 'Bandar Abbas', type: 'naval', color: '#FF3040', size: 0.5, label: true },
   { lat: 29.07, lng: 48.08, name: 'Kharg Island', type: 'energy', color: '#F59E0B', size: 0.5, label: true },
   { lat: 26.7958, lng: 49.9722, name: 'Ras Tanura', type: 'energy', color: '#F59E0B', size: 0.5 },
   { lat: 30.9563, lng: 34.9498, name: 'Dimona (Negev NRC)', type: 'nuclear', color: '#3B82F6', size: 0.5 },
   { lat: 33.5138, lng: 36.2765, name: 'Damascus', type: 'capital', color: '#FB923C', size: 0.5, label: true },
-  { lat: 38.08, lng: 46.2919, name: 'Tabriz', type: 'military', color: '#FF3B30', size: 0.4 },
+  { lat: 38.08, lng: 46.2919, name: 'Tabriz', type: 'military', color: '#FF3040', size: 0.4 },
   { lat: 14.7978, lng: 42.9547, name: 'Hodeidah', type: 'proxy', color: '#FB923C', size: 0.5 },
   { lat: 25.2048, lng: 55.2708, name: 'Dubai', type: 'gulf', color: '#F59E0B', size: 0.4 },
   { lat: 24.7136, lng: 46.6753, name: 'Riyadh', type: 'gulf', color: '#F59E0B', size: 0.4 },
@@ -44,15 +44,15 @@ const BASES: StrategicBase[] = [
 
 // ── Conflict arcs ──
 const CONFLICT_ARCS: ConflictArc[] = [
-  { startLat: 35.69, startLng: 51.39, endLat: 31.77, endLng: 35.21, color: ['#FF3B3088', '#FF3B3044'], label: 'Iran → Israel', stroke: 0.8 },
+  { startLat: 35.69, startLng: 51.39, endLat: 31.77, endLng: 35.21, color: ['#FF304088', '#FF304044'], label: 'Iran → Israel', stroke: 0.8 },
   { startLat: 31.77, startLng: 35.21, endLat: 35.69, endLng: 51.39, color: ['#3B82F688', '#3B82F644'], label: 'Israel → Iran', stroke: 0.6 },
   { startLat: 15.37, startLng: 44.19, endLat: 12.58, endLng: 43.15, color: ['#FB923C88', '#FB923C44'], label: 'Houthis → Bab el-Mandeb', stroke: 0.6 },
   { startLat: 33.89, startLng: 35.50, endLat: 31.77, endLng: 35.21, color: ['#FB923C88', '#FB923C44'], label: 'Hezbollah → Israel', stroke: 0.6 },
   { startLat: 25.41, startLng: 51.23, endLat: 26.57, endLng: 56.25, color: ['#60A5FA88', '#60A5FA44'], label: 'Al Udeid → Hormuz', stroke: 0.5 },
   { startLat: 15.37, startLng: 44.19, endLat: 20.00, endLng: 38.00, color: ['#FB923C88', '#FB923C44'], label: 'Houthis → Red Sea', stroke: 0.5 },
-  { startLat: 35.69, startLng: 51.39, endLat: 33.89, endLng: 35.50, color: ['#FF3B3066', '#FF3B3033'], label: 'Iran → Hezbollah', stroke: 0.4 },
-  { startLat: 35.69, startLng: 51.39, endLat: 15.37, endLng: 44.19, color: ['#FF3B3066', '#FF3B3033'], label: 'Iran → Houthis', stroke: 0.4 },
-  { startLat: 35.69, startLng: 51.39, endLat: 33.32, endLng: 44.37, color: ['#FF3B3044', '#FF3B3022'], label: 'Iran → Iraq Militias', stroke: 0.3 },
+  { startLat: 35.69, startLng: 51.39, endLat: 33.89, endLng: 35.50, color: ['#FF304066', '#FF304033'], label: 'Iran → Hezbollah', stroke: 0.4 },
+  { startLat: 35.69, startLng: 51.39, endLat: 15.37, endLng: 44.19, color: ['#FF304066', '#FF304033'], label: 'Iran → Houthis', stroke: 0.4 },
+  { startLat: 35.69, startLng: 51.39, endLat: 33.32, endLng: 44.37, color: ['#FF304044', '#FF304022'], label: 'Iran → Iraq Militias', stroke: 0.3 },
 ]
 
 // ── Location coordinate map ──
@@ -70,6 +70,14 @@ const LOCATION_MAP: Record<string, [number, number]> = {
   iraq: [33.2, 43.7], 'red sea': [20, 38], 'persian gulf': [26.5, 52],
   'kharg island': [29.07, 48.08], mecca: [21.4225, 39.8262],
   'west bank': [31.95, 35.2], erbil: [36.19, 44.01], kuwait: [29.37, 47.98],
+  ukraine: [48.38, 31.17], kyiv: [50.45, 30.52], moscow: [55.76, 37.62],
+  russia: [55.76, 37.62], china: [35.86, 104.2], taiwan: [23.7, 120.96],
+  'north korea': [40.0, 127.0], 'south korea': [35.9, 127.8], japan: [36.2, 138.3],
+  washington: [38.9, -77.0], 'new york': [40.71, -74.01], london: [51.51, -0.13],
+  paris: [48.86, 2.35], berlin: [52.52, 13.4], ankara: [39.93, 32.86],
+  cairo: [30.04, 31.24], libya: [26.34, 17.23], sudan: [15.5, 32.56],
+  somalia: [5.15, 46.2], pakistan: [30.38, 69.35], afghanistan: [33.94, 67.71],
+  india: [20.59, 78.96],
 }
 
 function extractCoords(item: IntelItem): { lat: number; lng: number } | null {
@@ -86,23 +94,22 @@ export type GlobeLayerId = 'events' | 'bases' | 'arcs' | 'nuclear' | 'energy' | 
 export interface GlobeLayer {
   id: GlobeLayerId
   label: string
-  icon: string
   color: string
   enabled: boolean
 }
 
 const DEFAULT_LAYERS: GlobeLayer[] = [
-  { id: 'events', label: 'EVENTS', icon: '⚡', color: '#FF3B30', enabled: true },
-  { id: 'arcs', label: 'CONFLICT FLOWS', icon: '→', color: '#FB923C', enabled: true },
-  { id: 'bases', label: 'MILITARY BASES', icon: '🎯', color: '#3B82F6', enabled: true },
-  { id: 'nuclear', label: 'NUCLEAR', icon: '☢', color: '#FF3B30', enabled: true },
-  { id: 'energy', label: 'ENERGY', icon: '⚡', color: '#F59E0B', enabled: true },
-  { id: 'usForces', label: 'US FORCES', icon: '★', color: '#60A5FA', enabled: true },
-  { id: 'aircraft', label: 'AIRCRAFT', icon: '✈', color: '#22D3EE', enabled: true },
-  { id: 'fires', label: 'FIRES/SAT', icon: '🔥', color: '#F97316', enabled: true },
+  { id: 'events', label: 'EVENTS', color: '#FF3040', enabled: true },
+  { id: 'arcs', label: 'ARCS', color: '#FB923C', enabled: true },
+  { id: 'bases', label: 'BASES', color: '#3B82F6', enabled: true },
+  { id: 'nuclear', label: 'NUCLEAR', color: '#FF3040', enabled: true },
+  { id: 'energy', label: 'ENERGY', color: '#F59E0B', enabled: true },
+  { id: 'usForces', label: 'US', color: '#60A5FA', enabled: true },
+  { id: 'aircraft', label: 'AIR', color: '#22D3EE', enabled: true },
+  { id: 'fires', label: 'FIRE', color: '#F97316', enabled: true },
 ]
 
-// ── Real-time solar position ──
+// ── Solar position ──
 function getSolarPosition() {
   const now = new Date()
   const jd = now.getTime() / 86400000 + 2440587.5
@@ -125,22 +132,6 @@ interface Props {
   fires?: FireHotspot[]
 }
 
-function GlobeFallback({ error }: { error?: Error }) {
-  return (
-    <div className="w-full h-full relative flex items-center justify-center"
-      style={{ background: 'radial-gradient(ellipse at center, #0a1628 0%, #060A0F 70%)' }}>
-      <div className="text-center">
-        <div className="text-sm tracking-[2px] mb-2" style={{ fontFamily: 'var(--mono)', color: '#FF3B30' }}>
-          GLOBE ERROR
-        </div>
-        <div className="text-[0.65rem]" style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
-          {error?.message || '3D rendering failed'}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Globe HUD ──
 function GlobeHUD({ sunPos, eventCount, aircraftCount, fireCount }: {
   sunPos: { lat: number; lng: number } | null; eventCount: number; aircraftCount?: number; fireCount?: number
@@ -154,29 +145,28 @@ function GlobeHUD({ sunPos, eventCount, aircraftCount, fireCount }: {
   return (
     <div style={{
       position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
-      display: 'flex', alignItems: 'center', gap: 14, zIndex: 50,
-      background: 'rgba(6,10,15,0.72)', backdropFilter: 'blur(10px)',
-      border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, padding: '4px 14px',
+      display: 'flex', alignItems: 'center', gap: 12, zIndex: 50,
+      background: 'rgba(5,10,18,0.8)', backdropFilter: 'blur(16px)',
+      border: '1px solid rgba(0,229,255,0.08)', borderRadius: 4, padding: '3px 12px',
     }}>
-      <span style={{ fontFamily: 'var(--mono)', fontSize: '0.55rem', color: 'var(--accent)' }}>
+      <span style={{ fontFamily: 'var(--display)', fontSize: '0.5rem', color: 'var(--accent)', letterSpacing: 3 }}>
+        VISUALIZING::LIVE_EVENTS
+      </span>
+      <span style={{ width: 1, height: 10, background: 'rgba(0,229,255,0.15)' }} />
+      <span style={{ fontFamily: 'var(--mono)', fontSize: '0.48rem', color: 'var(--accent)', opacity: 0.7 }}>
         {time.toISOString().slice(11, 19)} UTC
       </span>
       {sunPos && (
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: 'rgba(255,200,100,0.7)' }}>
-          ☀ {sunPos.lat.toFixed(0)}° {sunPos.lng.toFixed(0)}°
+        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.42rem', color: 'rgba(255,200,100,0.6)' }}>
+          SOL {sunPos.lat.toFixed(0)}°
         </span>
       )}
-      <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: '#FF3B30' }}>
-        {eventCount} events
+      <span style={{ fontFamily: 'var(--mono)', fontSize: '0.42rem', color: '#FF3040' }}>
+        {eventCount} EVT
       </span>
       {(aircraftCount ?? 0) > 0 && (
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: '#22D3EE' }}>
-          ✈ {aircraftCount}
-        </span>
-      )}
-      {(fireCount ?? 0) > 0 && (
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: '#F97316' }}>
-          🔥 {fireCount}
+        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.42rem', color: '#22D3EE' }}>
+          {aircraftCount} AC
         </span>
       )}
     </div>
@@ -189,28 +179,28 @@ function LayerControls({ layers, onToggle }: { layers: GlobeLayer[]; onToggle: (
 
   return (
     <div style={{
-      position: 'absolute', bottom: 36, left: '50%', transform: 'translateX(-50%)',
+      position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
       zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
     }}>
       {expanded && (
         <div style={{
-          display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center',
-          background: 'rgba(6,10,15,0.88)', backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 10px',
-          marginBottom: 4, maxWidth: 480,
+          display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center',
+          background: 'rgba(5,10,18,0.9)', backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(0,229,255,0.06)', borderRadius: 6, padding: '6px 8px',
+          marginBottom: 2, maxWidth: 440,
         }}>
           {layers.map((layer) => (
             <button key={layer.id} onClick={() => onToggle(layer.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px',
-              borderRadius: 4, cursor: 'pointer', fontSize: '0.48rem', fontFamily: 'var(--mono)',
+              display: 'flex', alignItems: 'center', gap: 3, padding: '2px 6px',
+              borderRadius: 3, cursor: 'pointer', fontSize: '0.42rem', fontFamily: 'var(--mono)',
               letterSpacing: 1, fontWeight: 700, transition: 'all 0.15s',
-              background: layer.enabled ? `${layer.color}18` : 'rgba(255,255,255,0.02)',
-              border: `1px solid ${layer.enabled ? `${layer.color}55` : 'rgba(255,255,255,0.06)'}`,
+              background: layer.enabled ? `${layer.color}10` : 'rgba(255,255,255,0.02)',
+              border: `1px solid ${layer.enabled ? `${layer.color}40` : 'rgba(255,255,255,0.04)'}`,
               color: layer.enabled ? layer.color : 'var(--text-dim)',
             }}>
               <span style={{
                 width: 4, height: 4, borderRadius: '50%',
-                background: layer.enabled ? layer.color : 'rgba(255,255,255,0.15)',
+                background: layer.enabled ? layer.color : 'rgba(255,255,255,0.1)',
                 boxShadow: layer.enabled ? `0 0 4px ${layer.color}` : 'none',
               }} />
               {layer.label}
@@ -220,17 +210,46 @@ function LayerControls({ layers, onToggle }: { layers: GlobeLayer[]; onToggle: (
       )}
 
       <button onClick={() => setExpanded(!expanded)} style={{
-        display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px',
-        borderRadius: 20, cursor: 'pointer', fontSize: '0.48rem', fontFamily: 'var(--mono)',
+        display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px',
+        borderRadius: 16, cursor: 'pointer', fontSize: '0.42rem', fontFamily: 'var(--mono)',
         letterSpacing: 2, fontWeight: 700,
-        background: 'rgba(6,10,15,0.88)', backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(0,229,255,0.2)', color: 'var(--accent)',
+        background: 'rgba(5,10,18,0.9)', backdropFilter: 'blur(16px)',
+        border: '1px solid rgba(0,229,255,0.12)', color: 'var(--accent)',
       }}>
         {expanded ? '▼' : '▲'} LAYERS
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.42rem', color: 'var(--text-dim)' }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.38rem', color: 'var(--text-dim)' }}>
           {layers.filter((l) => l.enabled).length}/{layers.length}
         </span>
       </button>
+    </div>
+  )
+}
+
+// ── Globe stats bar at bottom ──
+function GlobeStatsBar({ eventCount, aircraftCount, fireCount }: {
+  eventCount: number; aircraftCount: number; fireCount: number
+}) {
+  return (
+    <div style={{
+      position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)',
+      display: 'flex', alignItems: 'center', gap: 16, zIndex: 50,
+      background: 'rgba(5,10,18,0.75)', backdropFilter: 'blur(12px)',
+      border: '1px solid rgba(255,255,255,0.04)', borderRadius: 4, padding: '4px 16px',
+    }}>
+      {[
+        { label: 'GLOBAL LOAD', value: `${Math.min(99, Math.round(eventCount * 1.5 + 20))}%`, color: 'var(--accent)' },
+        { label: 'DATA RATE', value: `${(eventCount * 0.03 + 0.5).toFixed(1)}TB/s`, color: 'var(--accent)' },
+        { label: 'DEFCON', value: eventCount > 15 ? '3' : eventCount > 5 ? '4' : '5', color: eventCount > 15 ? '#FF3040' : '#FFB020' },
+      ].map((stat, i) => (
+        <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '0.35rem', color: 'var(--text-dim)', letterSpacing: 2 }}>
+            {stat.label}
+          </span>
+          <span style={{ fontFamily: 'var(--display)', fontSize: '0.7rem', fontWeight: 700, color: stat.color }}>
+            {stat.value}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -308,14 +327,12 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
       const Globe = GlobeModule.default as any
 
       const globe = Globe()
-        // NASA Blue Marble + topology bump + night texture
         .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
         .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
         .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
-        // Atmosphere glow — thicker, more cinematic
         .showAtmosphere(true)
-        .atmosphereColor('#0077ff')
-        .atmosphereAltitude(0.25)
+        .atmosphereColor('#0066dd')
+        .atmosphereAltitude(0.28)
         .width(mountDiv.clientWidth)
         .height(mountDiv.clientHeight)
         .pointOfView({ lat: 28, lng: 46, altitude: 2.0 }, 0)
@@ -324,10 +341,10 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
         .customThreeObject((d: StrategicBase) => {
           const group = new THREE.Group()
           const outerRing = new THREE.RingGeometry(d.size * 0.9, d.size * 1.1, 32)
-          group.add(new THREE.Mesh(outerRing, new THREE.MeshBasicMaterial({ color: d.color, side: THREE.DoubleSide, transparent: true, opacity: 0.3 })))
+          group.add(new THREE.Mesh(outerRing, new THREE.MeshBasicMaterial({ color: d.color, side: THREE.DoubleSide, transparent: true, opacity: 0.25 })))
           const innerRing = new THREE.RingGeometry(d.size * 0.45, d.size * 0.75, 32)
-          group.add(new THREE.Mesh(innerRing, new THREE.MeshBasicMaterial({ color: d.color, side: THREE.DoubleSide, transparent: true, opacity: 0.55 })))
-          group.add(new THREE.Mesh(new THREE.CircleGeometry(d.size * 0.22, 16), new THREE.MeshBasicMaterial({ color: d.color, side: THREE.DoubleSide })))
+          group.add(new THREE.Mesh(innerRing, new THREE.MeshBasicMaterial({ color: d.color, side: THREE.DoubleSide, transparent: true, opacity: 0.5 })))
+          group.add(new THREE.Mesh(new THREE.CircleGeometry(d.size * 0.2, 16), new THREE.MeshBasicMaterial({ color: d.color, side: THREE.DoubleSide })))
           return group
         })
         .customThreeObjectUpdate((obj: THREE.Group, d: StrategicBase) => {
@@ -337,7 +354,7 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
           if (obj.children[0]) {
             const t = Date.now() * 0.001
             ;(obj.children[0] as THREE.Mesh<any, THREE.MeshBasicMaterial>).material.opacity =
-              0.15 + Math.sin(t * 2 + d.lat) * 0.15
+              0.12 + Math.sin(t * 2 + d.lat) * 0.12
           }
         })
         // Conflict arcs
@@ -359,13 +376,13 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
         .labelColor((d: StrategicBase) => d.color)
         .labelResolution(2)
         .labelAltitude(0.015)
-        // Event markers — multi-layer pulsing dots with rich tooltips
+        // Event markers — pulsing dots with rich tooltips
         .htmlElementsData([])
         .htmlElement((d: GlobeEventPoint) => {
           const sev = d.item?.severity || 3
           const agent = d.item?.agentId || 'osint'
-          const outerSz = 20 + sev * 6 // outer pulse ring
-          const innerSz = 6 + sev * 2   // inner solid dot
+          const outerSz = 18 + sev * 5
+          const innerSz = 5 + sev * 2
           const agentIcons: Record<string, string> = {
             sigint: '📡', osint: '🔍', humint: '👤', geoint: '🛰️',
             econint: '📊', proxy: '🎯', diplo: '🏛️',
@@ -381,17 +398,17 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
           const pulseRing = document.createElement('div')
           pulseRing.style.cssText = `
             position:absolute;inset:0;border-radius:50%;
-            border:1.5px solid ${d.color};opacity:0.4;
+            border:1.5px solid ${d.color};opacity:0.35;
             animation:globePulse 2s ease-in-out infinite;
           `
           el.appendChild(pulseRing)
 
-          // Second pulse ring (staggered)
+          // Second pulse for critical
           if (sev >= 4) {
             const pulseRing2 = document.createElement('div')
             pulseRing2.style.cssText = `
               position:absolute;inset:-4px;border-radius:50%;
-              border:1px solid ${d.color};opacity:0.2;
+              border:1px solid ${d.color};opacity:0.15;
               animation:globePulse 2s ease-in-out 0.5s infinite;
             `
             el.appendChild(pulseRing2)
@@ -401,7 +418,7 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
           const glow = document.createElement('div')
           glow.style.cssText = `
             position:absolute;inset:0;border-radius:50%;
-            background:radial-gradient(circle,${d.color}44 0%,${d.color}11 50%,transparent 70%);
+            background:radial-gradient(circle,${d.color}33 0%,${d.color}08 50%,transparent 70%);
           `
           el.appendChild(glow)
 
@@ -415,36 +432,36 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
           `
           el.appendChild(dot)
 
-          // Rich tooltip card — shows on hover
+          // Rich tooltip card
           const tip = document.createElement('div')
           const sevLabels = ['', 'LOW', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
-          const sevColors = ['', '#30D158', '#30D158', '#FFD60A', '#FFB020', '#FF3B30']
+          const sevColors = ['', '#00E676', '#00E676', '#FFD60A', '#FFB020', '#FF3040']
           tip.style.cssText = `
-            position:absolute;bottom:${outerSz + 8}px;left:50%;transform:translateX(-50%);
-            background:rgba(6,10,15,0.95);border:1px solid ${d.color}55;border-radius:6px;
-            padding:8px 10px;pointer-events:none;z-index:100;
-            opacity:0;transition:opacity 0.15s;backdrop-filter:blur(12px);
-            min-width:200px;max-width:280px;box-shadow:0 4px 20px rgba(0,0,0,0.6);
+            position:absolute;bottom:${outerSz + 6}px;left:50%;transform:translateX(-50%);
+            background:rgba(5,10,18,0.95);border:1px solid ${d.color}40;border-radius:5px;
+            padding:7px 9px;pointer-events:none;z-index:100;
+            opacity:0;transition:opacity 0.15s;backdrop-filter:blur(16px);
+            min-width:180px;max-width:260px;box-shadow:0 4px 24px rgba(0,0,0,0.6);
           `
           tip.innerHTML = `
-            <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">
-              <span style="font-size:10px">${agentIcons[agent] || '⚡'}</span>
-              <span style="font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;color:${d.color};letter-spacing:1px;">${(agent || 'OSINT').toUpperCase()}</span>
-              <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:7px;font-weight:700;color:${sevColors[sev]};padding:1px 4px;border-radius:2px;background:${sevColors[sev]}15;border:1px solid ${sevColors[sev]}30;">${sevLabels[sev]}</span>
+            <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">
+              <span style="font-size:9px">${agentIcons[agent] || '⚡'}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:7px;font-weight:700;color:${d.color};letter-spacing:1px;">${(agent || 'OSINT').toUpperCase()}</span>
+              <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:6px;font-weight:700;color:${sevColors[sev]};padding:1px 3px;border-radius:2px;background:${sevColors[sev]}10;border:1px solid ${sevColors[sev]}20;">${sevLabels[sev]}</span>
             </div>
-            <div style="font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:#e2e8f0;line-height:1.3;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${d.item?.headline || d.label || ''}</div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              ${d.item?.source ? `<span style="font-family:'JetBrains Mono',monospace;font-size:7px;color:rgba(255,255,255,0.4);">${d.item.source}</span>` : ''}
-              ${d.item?.time ? `<span style="font-family:'JetBrains Mono',monospace;font-size:7px;color:rgba(0,229,255,0.5);">${d.item.time}</span>` : ''}
-              ${d.item?.location ? `<span style="font-family:'JetBrains Mono',monospace;font-size:7px;color:rgba(255,255,255,0.3);">📍 ${d.item.location}</span>` : ''}
+            <div style="font-family:'Inter',sans-serif;font-size:10px;font-weight:600;color:#e8ecf1;line-height:1.3;margin-bottom:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${d.item?.headline || d.label || ''}</div>
+            <div style="display:flex;align-items:center;gap:5px;">
+              ${d.item?.source ? `<span style="font-family:'JetBrains Mono',monospace;font-size:6px;color:rgba(255,255,255,0.35);">${d.item.source}</span>` : ''}
+              ${d.item?.time ? `<span style="font-family:'JetBrains Mono',monospace;font-size:6px;color:rgba(0,229,255,0.4);">${d.item.time}</span>` : ''}
+              ${d.item?.location ? `<span style="font-family:'JetBrains Mono',monospace;font-size:6px;color:rgba(255,255,255,0.25);">📍 ${d.item.location}</span>` : ''}
             </div>
-            <div style="margin-top:4px;font-family:'JetBrains Mono',monospace;font-size:6px;color:rgba(0,229,255,0.3);letter-spacing:1px;">CLICK FOR DETAILS</div>
+            <div style="margin-top:3px;font-family:'JetBrains Mono',monospace;font-size:5px;color:rgba(0,229,255,0.25);letter-spacing:1.5px;">CLICK FOR DETAILS</div>
           `
           el.appendChild(tip)
 
           el.onclick = () => onSelectEvent?.(d.item)
           el.onmouseenter = () => {
-            el.style.transform = 'scale(1.5)'
+            el.style.transform = 'scale(1.4)'
             tip.style.opacity = '1'
           }
           el.onmouseleave = () => {
@@ -457,35 +474,40 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
 
       globeRef.current = globe
 
-      // Enhanced globe material — cinematic look
+      // Enhanced globe material
       const globeMaterial = globe.globeMaterial()
-      globeMaterial.bumpScale = 8
-      globeMaterial.emissive = new THREE.Color('#041628')
-      globeMaterial.emissiveIntensity = 0.15
-      globeMaterial.shininess = 40
+      globeMaterial.bumpScale = 10
+      globeMaterial.emissive = new THREE.Color('#031020')
+      globeMaterial.emissiveIntensity = 0.12
+      globeMaterial.shininess = 50
       globeMaterial.specular = new THREE.Color('#1a3a5c')
 
       const scene = globe.scene()
 
-      // Cinematic lighting setup
-      scene.add(new THREE.AmbientLight(0x224488, 0.6))
-      const sunLight = new THREE.DirectionalLight(0xfff0d0, 1.8)
+      // Cinematic lighting
+      scene.add(new THREE.AmbientLight(0x1a3366, 0.5))
+      const sunLight = new THREE.DirectionalLight(0xfff0d0, 2.0)
       sunLight.position.set(5, 3, 5)
       scene.add(sunLight)
       sunLightRef.current = sunLight
 
-      // Subtle blue rim light from behind
-      const rimLight = new THREE.DirectionalLight(0x0055ff, 0.3)
+      // Blue rim light
+      const rimLight = new THREE.DirectionalLight(0x0055ff, 0.35)
       rimLight.position.set(-3, -1, -3)
       scene.add(rimLight)
 
-      // Cloud layer (rotates slowly)
+      // Subtle cyan top light
+      const topLight = new THREE.DirectionalLight(0x00ccff, 0.15)
+      topLight.position.set(0, 5, 0)
+      scene.add(topLight)
+
+      // Cloud layer
       const cloudGeo = new THREE.SphereGeometry(102.2, 64, 64)
       const cloudTex = new THREE.TextureLoader().load(
         '//unpkg.com/three-globe/example/img/earth-clouds.png'
       )
       const cloudMat = new THREE.MeshPhongMaterial({
-        map: cloudTex, transparent: true, opacity: 0.32,
+        map: cloudTex, transparent: true, opacity: 0.25,
         depthWrite: false, blending: THREE.AdditiveBlending,
       })
       const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat)
@@ -494,7 +516,7 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
 
       // Controls
       globe.controls().autoRotate = true
-      globe.controls().autoRotateSpeed = 0.2
+      globe.controls().autoRotateSpeed = 0.15
       globe.controls().enableDamping = true
       globe.controls().dampingFactor = 0.1
       globe.controls().minDistance = 140
@@ -505,7 +527,7 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
       const animate = () => {
         animFrameRef.current = requestAnimationFrame(animate)
         frame++
-        if (cloudMeshRef.current) cloudMeshRef.current.rotation.y += 0.00008
+        if (cloudMeshRef.current) cloudMeshRef.current.rotation.y += 0.00006
         if (frame % 120 === 0) {
           const { sunLat, sunLng } = getSolarPosition()
           setSunPos({ lat: sunLat, lng: sunLng })
@@ -546,30 +568,29 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
     globeRef.current.htmlElementsData(eventPoints())
   }, [intelItems, ready, eventPoints])
 
-  // Update bases/labels when layers change
+  // Update bases/labels
   useEffect(() => {
     if (!globeRef.current || !ready) return
     globeRef.current.customLayerData(filteredBases)
     globeRef.current.labelsData(filteredBases.filter((b: StrategicBase) => b.label))
   }, [filteredBases, ready])
 
-  // Update arcs when layers change
+  // Update arcs
   useEffect(() => {
     if (!globeRef.current || !ready) return
     globeRef.current.arcsData(filteredArcs)
   }, [filteredArcs, ready])
 
-  // Update aircraft points when data changes
+  // Update aircraft
   const aircraftPoints = useMemo(() => {
     if (!layerMap.aircraft || !aircraft.length) return []
     return aircraft
       .filter(a => !a.onGround && a.lat && a.lng)
       .slice(0, 300)
       .map(a => ({
-        lat: a.lat,
-        lng: a.lng,
+        lat: a.lat, lng: a.lng,
         alt: Math.min((a.altitude || 1000) / 100000, 0.15),
-        color: a.category === 'military' ? '#FF3B30' : a.category === 'government' ? '#FFB020' : '#22D3EE',
+        color: a.category === 'military' ? '#FF3040' : a.category === 'government' ? '#FFB020' : '#22D3EE',
         size: a.category === 'military' ? 0.35 : 0.15,
         label: `${a.callsign || a.icao24} [${a.originCountry}] ${Math.round(a.altitude)}m`,
       }))
@@ -578,41 +599,30 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
   useEffect(() => {
     if (!globeRef.current || !ready) return
     globeRef.current
-      .pointsData(aircraftPoints)
-      .pointLat('lat')
-      .pointLng('lng')
-      .pointAltitude('alt')
-      .pointColor('color')
-      .pointRadius('size')
-      .pointLabel('label')
+      .pointsData(aircraftPoints).pointLat('lat').pointLng('lng')
+      .pointAltitude('alt').pointColor('color').pointRadius('size').pointLabel('label')
   }, [aircraftPoints, ready])
 
-  // Update fire/hotspot rings when data changes
+  // Update fires
   const fireRings = useMemo(() => {
     if (!layerMap.fires || !fires.length) return []
     return fires
       .filter(f => f.confidence !== 'low' && f.frp > 5)
       .slice(0, 200)
       .map(f => ({
-        lat: f.lat,
-        lng: f.lng,
+        lat: f.lat, lng: f.lng,
         maxR: Math.min(f.frp / 20, 3),
-        propagationSpeed: 2,
-        repeatPeriod: 1200,
-        color: f.frp > 100 ? '#FF3B30' : f.frp > 30 ? '#FB923C' : '#F59E0B',
+        propagationSpeed: 2, repeatPeriod: 1200,
+        color: f.frp > 100 ? '#FF3040' : f.frp > 30 ? '#FB923C' : '#F59E0B',
       }))
   }, [fires, layerMap.fires])
 
   useEffect(() => {
     if (!globeRef.current || !ready) return
     globeRef.current
-      .ringsData(fireRings)
-      .ringLat('lat')
-      .ringLng('lng')
-      .ringMaxRadius('maxR')
-      .ringPropagationSpeed('propagationSpeed')
-      .ringRepeatPeriod('repeatPeriod')
-      .ringColor('color')
+      .ringsData(fireRings).ringLat('lat').ringLng('lng')
+      .ringMaxRadius('maxR').ringPropagationSpeed('propagationSpeed')
+      .ringRepeatPeriod('repeatPeriod').ringColor('color')
   }, [fireRings, ready])
 
   // Fly to selected event
@@ -631,12 +641,12 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
       {!ready && (
         <div className="absolute inset-0 flex items-center justify-center z-10">
           <div className="text-center">
-            <div className="w-12 h-12 rounded-full border-2 border-[#00E5FF]/30 mx-auto mb-4"
-              style={{ borderTopColor: '#00E5FF', animation: 'spin 1s linear infinite', boxShadow: '0 0 20px rgba(0,229,255,0.2)' }} />
-            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.75rem', color: '#00E5FF', letterSpacing: 4, marginBottom: 6 }}>
-              INITIALIZING GLOBE
+            <div className="w-10 h-10 rounded-full border-2 border-[#00E5FF]/20 mx-auto mb-3"
+              style={{ borderTopColor: '#00E5FF', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ fontFamily: 'var(--display)', fontSize: '0.65rem', color: '#00E5FF', letterSpacing: 6, marginBottom: 4 }}>
+              INITIALIZING
             </div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: 'rgba(0,229,255,0.3)', letterSpacing: 2 }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.42rem', color: 'rgba(0,229,255,0.25)', letterSpacing: 2 }}>
               NASA BLUE MARBLE · CLOUD LAYER · SOLAR TERMINATOR
             </div>
           </div>
@@ -645,6 +655,7 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
       {ready && (
         <>
           <GlobeHUD sunPos={sunPos} eventCount={intelItems.length} aircraftCount={aircraft.length} fireCount={fires.length} />
+          <GlobeStatsBar eventCount={intelItems.length} aircraftCount={aircraft.length} fireCount={fires.length} />
           <LayerControls layers={layers} onToggle={toggleLayer} />
         </>
       )}
@@ -659,7 +670,19 @@ class GlobeErrorBoundary extends Component<{ children: ReactNode }, { error: Err
   constructor(props: { children: ReactNode }) { super(props); this.state = { error: null } }
   static getDerivedStateFromError(error: Error) { return { error } }
   render() {
-    if (this.state.error) return <GlobeFallback error={this.state.error} />
+    if (this.state.error) return (
+      <div className="w-full h-full relative flex items-center justify-center"
+        style={{ background: 'radial-gradient(ellipse at center, #081428 0%, #050A12 70%)' }}>
+        <div className="text-center">
+          <div className="text-sm tracking-[2px] mb-2" style={{ fontFamily: 'var(--mono)', color: '#FF3040' }}>
+            GLOBE ERROR
+          </div>
+          <div className="text-[0.6rem]" style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
+            {this.state.error?.message || '3D rendering failed'}
+          </div>
+        </div>
+      </div>
+    )
     return this.props.children
   }
 }
