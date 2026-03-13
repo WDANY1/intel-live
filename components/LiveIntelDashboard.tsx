@@ -7,87 +7,84 @@ import {
   AGENTS,
   WEBCAM_FEEDS,
   NEWS_STREAMS,
-  REFRESH_INTERVAL,
   AI_MODELS,
   SEVERITY_CONFIG,
 } from '@/lib/config'
 import { AgentManager, verifyIntel } from '@/lib/agents'
 import { useLiveData } from '@/lib/useLiveData'
-import { useEventStream } from '@/lib/useEventStream'
-import { extractIntelFromRSS } from '@/lib/extraction'
 import type {
   IntelItem,
   AnalysisResult,
   BreakingItem,
   AgentStatusMap,
   IntelMap,
-  RSSArticle,
-  VerificationResult,
+  LogEntry,
   AgentProgress,
 } from '@/lib/types'
 
-// Load Globe dynamically (WebGL, browser-only)
 const Globe3D = dynamic(() => import('./Globe3D'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, #081428 0%, #050A12 70%)' }}>
+    <div className="w-full h-full flex items-center justify-center"
+      style={{ background: 'radial-gradient(ellipse at center, #060d1a 0%, #020509 100%)' }}>
       <div className="text-center">
-        <div className="w-10 h-10 rounded-full border-2 border-[#00E5FF]/20 mx-auto mb-3"
-          style={{ borderTopColor: '#00E5FF', animation: 'spin 0.8s linear infinite' }} />
-        <div style={{ fontFamily: 'var(--display)', fontSize: '0.65rem', color: '#00E5FF', letterSpacing: 6 }}>
-          INITIALIZING
-        </div>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid rgba(0,229,255,0.15)', borderTopColor: '#00E5FF', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+        <div style={{ fontFamily: 'var(--display)', fontSize: '0.55rem', color: '#00E5FF', letterSpacing: 6 }}>INITIALIZING</div>
       </div>
     </div>
   ),
 })
 
-// ── Utility ──
-function getTimeAgo(date: Date): string {
-  const diff = Date.now() - date.getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'NOW'
-  if (mins < 60) return `${mins}m`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h`
-  return `${Math.floor(hrs / 24)}d`
+// ── Helpers ──
+function zuluTime(d: Date) { return d.toISOString().slice(11, 19) }
+function timeAgo(ms: number) {
+  const m = Math.floor((Date.now() - ms) / 60000)
+  if (m < 1) return 'NOW'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`
 }
 
-function formatZuluTime(date: Date): string {
-  return date.toISOString().slice(11, 19)
+function nodeName(item: IntelItem, index: number): string {
+  const agentPrefixes: Record<string, string> = {
+    sigint: 'SIG', osint: 'OSN', humint: 'HUM', geoint: 'GEO',
+    econint: 'ECN', proxy: 'PRX', diplo: 'DPL',
+  }
+  const prefix = agentPrefixes[item.agentId || 'osint'] || 'INT'
+  return `NODE::${prefix}-${String(index + 1).padStart(2, '0')}`
 }
 
-// ── Severity components ──
-function SeverityDot({ level, size = 5 }: { level: number; size?: number }) {
-  const c = SEVERITY_CONFIG[level as keyof typeof SEVERITY_CONFIG] || SEVERITY_CONFIG[3]
-  return (
-    <span style={{
-      width: size, height: size, borderRadius: '50%', background: c.color,
-      boxShadow: `0 0 ${size + 2}px ${c.color}`, display: 'inline-block', flexShrink: 0,
-    }} />
-  )
+function nodeStatus(severity: number): { label: string; color: string } {
+  if (severity >= 5) return { label: 'CRITICAL', color: '#FF3040' }
+  if (severity >= 4) return { label: 'HIGH', color: '#FF6B35' }
+  if (severity >= 3) return { label: 'WARNING', color: '#FFB020' }
+  if (severity >= 2) return { label: 'NOMINAL', color: '#00E5FF' }
+  return { label: 'STABLE', color: '#00E676' }
 }
 
-function SeverityBadge({ level }: { level: number }) {
-  const c = SEVERITY_CONFIG[level as keyof typeof SEVERITY_CONFIG] || SEVERITY_CONFIG[3]
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 3,
-      padding: '1px 5px', borderRadius: 2, fontSize: '0.5rem',
-      fontFamily: 'var(--mono)', fontWeight: 700, letterSpacing: 1.5,
-      background: `${c.color}10`, color: c.color, border: `1px solid ${c.color}20`,
-    }}>
-      {c.label}
-    </span>
-  )
+// ── Types ──
+interface DashState {
+  intel: IntelMap
+  analysis: AnalysisResult | null
+  breaking: BreakingItem[]
+  logs: LogEntry[]
+  agentStatus: AgentStatusMap
+  modelsUsed: string[]
+  cycle: number
+  status: 'idle' | 'running' | 'done' | 'error'
+  apiKey: string
 }
 
-// ── Top Command Bar ──
-function CommandBar({
-  status, cycle, totalItems, modelsActive, onRefresh, aircraftCount, fireCount, sseConnected,
+// ══════════════════════════════════════════════════════
+// TOP HEADER BAR
+// ══════════════════════════════════════════════════════
+function HeaderBar({
+  status, cycle, totalItems, modelsActive, onRefresh, onToggleAgents, agentsRunning,
+  onOpenWebcams, sseConnected, aircraftCount,
 }: {
   status: string; cycle: number; totalItems: number; modelsActive: number;
-  onRefresh: () => void; aircraftCount?: number; fireCount?: number; sseConnected?: boolean
+  onRefresh: () => void; onToggleAgents: () => void; agentsRunning: boolean;
+  onOpenWebcams: () => void; sseConnected?: boolean; aircraftCount?: number;
 }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => {
@@ -95,106 +92,919 @@ function CommandBar({
     return () => clearInterval(t)
   }, [])
 
+  const isScanning = status === 'running'
+
   return (
     <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, height: 40, zIndex: 1000,
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px',
-      background: 'rgba(5,10,18,0.92)', backdropFilter: 'blur(24px)',
-      borderBottom: '1px solid rgba(0,229,255,0.06)',
+      position: 'fixed', top: 0, left: 0, right: 0, height: 44, zIndex: 1000,
+      background: 'rgba(4,8,16,0.97)', backdropFilter: 'blur(20px)',
+      borderBottom: '1px solid rgba(0,229,255,0.08)',
+      display: 'flex', alignItems: 'center', padding: '0 14px', gap: 14,
     }}>
-      {/* Left: Brand */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{
-            width: 6, height: 6, borderRadius: '50%',
-            background: status === 'running' ? '#00E676' : '#00E5FF',
-            boxShadow: `0 0 8px ${status === 'running' ? '#00E676' : '#00E5FF'}`,
-            animation: status === 'running' ? 'pulse 1.2s ease infinite' : 'pulse 3s ease infinite',
-          }} />
-          <span style={{ fontFamily: 'var(--display)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: 4, color: '#fff' }}>
-            INTEL<span style={{ color: 'var(--accent)' }}>LIVE</span>
-          </span>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: '0.4rem', color: 'var(--text-dim)', letterSpacing: 2 }}>v11.0</span>
+      {/* Brand */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{
+          width: 26, height: 26, borderRadius: '50%', border: '1.5px solid rgba(0,229,255,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,229,255,0.06)',
+        }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#00E5FF', boxShadow: '0 0 8px #00E5FF' }} />
+        </div>
+        <div>
+          <div style={{ fontFamily: 'var(--display)', fontSize: '0.75rem', fontWeight: 800, letterSpacing: 3, lineHeight: 1, color: '#fff' }}>
+            INTEL<span style={{ color: '#00E5FF' }}>-LIVE</span>
+          </div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.35rem', color: 'rgba(0,229,255,0.4)', letterSpacing: 2 }}>V5.0.2</div>
         </div>
       </div>
 
-      {/* Center: Status */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontFamily: 'var(--mono)', fontSize: '0.55rem', letterSpacing: 1 }}>
-        <span style={{ color: status === 'running' ? '#00E676' : 'var(--text-muted)' }}>
-          STATUS: {status === 'running' ? 'SCANNING' : 'NOMINAL'}
+      <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.06)' }} />
+
+      {/* Status indicators */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontFamily: 'var(--mono)', fontSize: '0.52rem', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{
+            width: 5, height: 5, borderRadius: '50%',
+            background: isScanning ? '#00E676' : '#00E5FF',
+            boxShadow: `0 0 6px ${isScanning ? '#00E676' : '#00E5FF'}`,
+            animation: 'pulse 1.5s ease infinite',
+          }} />
+          <span style={{ color: isScanning ? '#00E676' : 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>
+            {isScanning ? 'SCANNING' : 'NOMINAL'}
+          </span>
+        </div>
+
+        <span style={{ color: '#00E5FF', letterSpacing: 1 }}>ZULU {zuluTime(time)}</span>
+
+        <span style={{ color: 'rgba(255,255,255,0.35)', letterSpacing: 1 }}>
+          <span style={{ color: '#00E5FF' }}>{totalItems}</span> SIGNALS
         </span>
-        <span style={{ color: 'var(--text-dim)' }}>|</span>
-        <span style={{ color: 'var(--accent)' }}>ZULU {formatZuluTime(time)}</span>
-        <span style={{ color: 'var(--text-dim)' }}>|</span>
-        <span style={{ color: 'var(--text-muted)' }}>
-          <span style={{ color: 'var(--accent)' }}>{totalItems}</span> SIGNALS
+
+        <span style={{ color: 'rgba(255,255,255,0.35)', letterSpacing: 1 }}>
+          CYCLE <span style={{ color: '#00E5FF' }}>#{cycle}</span>
         </span>
-        <span style={{ color: 'var(--text-muted)' }}>
-          <span style={{ color: 'var(--accent)' }}>{modelsActive}</span> AI
-        </span>
+
         {(aircraftCount ?? 0) > 0 && (
-          <span style={{ color: '#22D3EE' }}>{aircraftCount} AC</span>
+          <span style={{ color: '#22D3EE', letterSpacing: 1 }}>{aircraftCount} AIRCRAFT</span>
         )}
-        {sseConnected && <span className="live-dot" title="SSE Connected" />}
+
+        {sseConnected && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: '#00E676', letterSpacing: 1 }}>
+            <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#00E676', animation: 'pulse 2s ease infinite' }} />
+            LIVE
+          </span>
+        )}
       </div>
 
-      {/* Right: Actions */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* Right controls */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         {/* Signal bars */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1.5, height: 14 }}>
-          {[4, 7, 10, 13, 14].map((h, i) => (
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 16 }}>
+          {[4, 6, 9, 12, 15].map((h, i) => (
             <div key={i} style={{
               width: 3, height: h, borderRadius: 1,
-              background: i < 4 ? 'var(--accent)' : 'rgba(0,229,255,0.2)',
-              transition: 'height 0.3s ease',
+              background: i < 4 ? '#00E5FF' : 'rgba(0,229,255,0.15)',
             }} />
           ))}
         </div>
+
+        <button onClick={onOpenWebcams} style={{
+          fontFamily: 'var(--mono)', fontSize: '0.45rem', letterSpacing: 1.5, fontWeight: 600,
+          color: 'rgba(255,255,255,0.45)', padding: '3px 8px',
+          border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3,
+          background: 'transparent', cursor: 'pointer',
+        }}>
+          FEEDS
+        </button>
+
         <button onClick={onRefresh} style={{
-          fontFamily: 'var(--mono)', fontSize: '0.5rem', letterSpacing: 2, fontWeight: 700,
-          color: 'var(--accent)', padding: '4px 12px',
-          border: '1px solid rgba(0,229,255,0.25)', borderRadius: 3,
-          background: 'rgba(0,229,255,0.06)', cursor: 'pointer',
-          transition: 'all 0.15s',
+          fontFamily: 'var(--mono)', fontSize: '0.45rem', letterSpacing: 1.5, fontWeight: 600,
+          color: 'rgba(255,255,255,0.45)', padding: '3px 8px',
+          border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3,
+          background: 'transparent', cursor: 'pointer',
         }}>
           REFRESH
+        </button>
+
+        <button onClick={onToggleAgents} style={{
+          fontFamily: 'var(--mono)', fontSize: '0.48rem', letterSpacing: 2, fontWeight: 700,
+          color: agentsRunning ? '#FF3040' : '#00E5FF', padding: '4px 14px',
+          border: `1px solid ${agentsRunning ? 'rgba(255,48,64,0.35)' : 'rgba(0,229,255,0.35)'}`,
+          borderRadius: 3,
+          background: agentsRunning ? 'rgba(255,48,64,0.08)' : 'rgba(0,229,255,0.06)',
+          cursor: 'pointer',
+        }}>
+          {agentsRunning ? 'DISCONNECT' : 'ESTABLISH UPLINK'}
         </button>
       </div>
     </div>
   )
 }
 
-// ── Breaking Ticker ──
-function BreakingTicker({ items = [] }: { items: BreakingItem[] }) {
-  if (!items.length) return null
-  const doubled = [...items, ...items]
+// ══════════════════════════════════════════════════════
+// LEFT PANEL — ACTIVE NODES (Intel Feed)
+// ══════════════════════════════════════════════════════
+function ActiveNodesPanel({
+  items, onSelect, selectedItem,
+}: {
+  items: IntelItem[]; onSelect: (item: IntelItem) => void; selectedItem: IntelItem | null;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [filter, setFilter] = useState<string>('ALL')
+  const agentIds = useMemo(() => ['ALL', ...AGENTS.map(a => a.id.toUpperCase())], [])
+
+  const filtered = useMemo(() => {
+    if (filter === 'ALL') return items
+    return items.filter(i => (i.agentId || '').toUpperCase() === filter)
+  }, [items, filter])
+
+  // Auto-scroll to top on new items
+  useEffect(() => {
+    if (scrollRef.current && scrollRef.current.scrollTop < 100) {
+      scrollRef.current.scrollTop = 0
+    }
+  }, [items.length])
+
+  const criticalCount = items.filter(i => i.severity >= 4).length
 
   return (
     <div style={{
-      position: 'fixed', bottom: 0, left: 0, right: 0, height: 26, zIndex: 1000,
-      background: 'rgba(5,10,18,0.92)', backdropFilter: 'blur(24px)',
-      borderTop: '1px solid rgba(255,48,64,0.12)',
+      width: 290, flexShrink: 0, height: '100%',
+      background: 'rgba(4,8,16,0.92)', borderRight: '1px solid rgba(0,229,255,0.07)',
+      display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    }}>
+      {/* Panel header */}
+      <div style={{
+        padding: '10px 12px 8px', borderBottom: '1px solid rgba(0,229,255,0.06)',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 2, height: 12, background: '#00E5FF', boxShadow: '0 0 6px #00E5FF' }} />
+            <span style={{ fontFamily: 'var(--mono)', fontSize: '0.6rem', fontWeight: 700, letterSpacing: 3, color: '#fff' }}>
+              ACTIVE NODES
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            {criticalCount > 0 && (
+              <span style={{
+                fontFamily: 'var(--mono)', fontSize: '0.42rem', letterSpacing: 1, fontWeight: 700,
+                color: '#FF3040', padding: '1px 5px', border: '1px solid rgba(255,48,64,0.3)',
+                borderRadius: 2, background: 'rgba(255,48,64,0.08)', animation: 'alertFlash 1.5s ease infinite',
+              }}>
+                {criticalCount} ALERT
+              </span>
+            )}
+            <span style={{ fontFamily: 'var(--mono)', fontSize: '0.42rem', color: 'rgba(0,229,255,0.4)', letterSpacing: 1 }}>
+              {filtered.length}/{items.length}
+            </span>
+          </div>
+        </div>
+
+        {/* Agent filters */}
+        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+          {agentIds.slice(0, 8).map(id => (
+            <button key={id} onClick={() => setFilter(id)} style={{
+              fontFamily: 'var(--mono)', fontSize: '0.38rem', letterSpacing: 1, fontWeight: 600,
+              padding: '2px 5px', borderRadius: 2, cursor: 'pointer',
+              background: filter === id ? 'rgba(0,229,255,0.12)' : 'transparent',
+              border: `1px solid ${filter === id ? 'rgba(0,229,255,0.3)' : 'rgba(255,255,255,0.06)'}`,
+              color: filter === id ? '#00E5FF' : 'rgba(255,255,255,0.3)',
+            }}>
+              {id === 'ALL' ? 'ALL' : id.slice(0, 3)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Scrollable node list */}
+      <div ref={scrollRef} style={{
+        flex: 1, overflowY: 'auto', padding: '6px 8px',
+        display: 'flex', flexDirection: 'column', gap: 5,
+      }}>
+        <AnimatePresence initial={false}>
+          {filtered.map((item, idx) => {
+            const st = nodeStatus(item.severity)
+            const isSelected = selectedItem?.headline === item.headline
+            const agentColors: Record<string, string> = {
+              sigint: '#FF3040', osint: '#4fc3f7', humint: '#e040fb',
+              geoint: '#69f0ae', econint: '#ffd740', proxy: '#ff6b35', diplo: '#b388ff',
+            }
+            const agColor = agentColors[item.agentId || 'osint'] || '#00E5FF'
+
+            return (
+              <motion.div
+                key={`${item.headline}-${idx}`}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                onClick={() => onSelect(item)}
+                style={{
+                  background: isSelected ? 'rgba(0,229,255,0.06)' : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${isSelected ? 'rgba(0,229,255,0.2)' : 'rgba(255,255,255,0.04)'}`,
+                  borderRadius: 4, padding: '8px 10px', cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  borderLeft: `2px solid ${agColor}`,
+                }}
+              >
+                {/* Top row: name + status */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{
+                    fontFamily: 'var(--mono)', fontSize: '0.52rem', fontWeight: 700,
+                    color: agColor, letterSpacing: 1,
+                  }}>
+                    {nodeName(item, items.indexOf(item))}
+                  </span>
+                  <span style={{
+                    fontFamily: 'var(--mono)', fontSize: '0.4rem', fontWeight: 700,
+                    color: st.color, letterSpacing: 1, padding: '1px 4px',
+                    border: `1px solid ${st.color}30`, borderRadius: 2,
+                    background: `${st.color}10`,
+                  }}>
+                    {st.label}
+                  </span>
+                </div>
+
+                {/* Headline */}
+                <div style={{
+                  fontFamily: 'var(--sans)', fontSize: '0.62rem', color: 'rgba(232,236,241,0.82)',
+                  lineHeight: 1.35, marginBottom: 5,
+                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                }}>
+                  {item.headline}
+                </div>
+
+                {/* Coords + time */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: '0.4rem', color: 'rgba(255,255,255,0.25)', letterSpacing: 0.5 }}>
+                    {item.location
+                      ? `📍 ${item.location.slice(0, 20)}`
+                      : `LAT: -- | LON: --`}
+                  </span>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: '0.4rem', color: 'rgba(0,229,255,0.35)' }}>
+                    {item.fetchedAt ? timeAgo(item.fetchedAt) : item.time || '--'}
+                  </span>
+                </div>
+
+                {/* Severity bar */}
+                <div style={{ height: 2, background: 'rgba(255,255,255,0.05)', borderRadius: 1, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', width: `${(item.severity / 5) * 100}%`,
+                    background: st.color, boxShadow: `0 0 4px ${st.color}`,
+                    transition: 'width 0.4s ease',
+                  }} />
+                </div>
+              </motion.div>
+            )
+          })}
+        </AnimatePresence>
+
+        {filtered.length === 0 && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            padding: '40px 20px', gap: 8,
+          }}>
+            <div style={{ width: 24, height: 24, borderRadius: '50%', border: '1.5px solid rgba(0,229,255,0.15)', borderTopColor: '#00E5FF', animation: 'spin 1s linear infinite' }} />
+            <span style={{ fontFamily: 'var(--mono)', fontSize: '0.48rem', color: 'rgba(0,229,255,0.3)', letterSpacing: 2 }}>
+              AWAITING SIGNALS
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom stats */}
+      <div style={{
+        padding: '8px 12px', borderTop: '1px solid rgba(255,255,255,0.04)',
+        display: 'flex', justifyContent: 'space-between', flexShrink: 0,
+      }}>
+        <div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.38rem', color: 'rgba(255,255,255,0.25)', letterSpacing: 1.5, marginBottom: 1 }}>TOTAL NODES</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', fontWeight: 700, color: '#fff' }}>{items.length.toLocaleString()}</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.38rem', color: 'rgba(255,255,255,0.25)', letterSpacing: 1.5, marginBottom: 1 }}>ACTIVE ALERTS</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', fontWeight: 700, color: criticalCount > 0 ? '#FF3040' : '#00E676' }}>
+            {criticalCount > 0 ? criticalCount : 'NONE'}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════
+// RIGHT PANEL — LIVE TELEMETRY + CONSOLE LOGS
+// ══════════════════════════════════════════════════════
+function TelemetryPanel({
+  logs, items, analysis, modelsUsed, cycle, status,
+}: {
+  logs: LogEntry[]; items: IntelItem[]; analysis: AnalysisResult | null;
+  modelsUsed: string[]; cycle: number; status: string;
+}) {
+  const logScrollRef = useRef<HTMLDivElement>(null)
+  const [cmd, setCmd] = useState('')
+
+  // Auto scroll logs
+  useEffect(() => {
+    if (logScrollRef.current) {
+      logScrollRef.current.scrollTop = logScrollRef.current.scrollHeight
+    }
+  }, [logs.length])
+
+  const critCount = items.filter(i => i.severity >= 4).length
+  const totalSig = items.length
+  const threatLevel = analysis?.threat_level ?? (critCount > 3 ? 7 : critCount > 1 ? 5 : 3)
+  const defcon = threatLevel >= 8 ? '2' : threatLevel >= 6 ? '3' : threatLevel >= 4 ? '4' : '5'
+  const defconColor = defcon === '2' ? '#FF3040' : defcon === '3' ? '#FFB020' : defcon === '4' ? '#FFD60A' : '#00E676'
+
+  // Build bar chart data (last 8 cycles worth of activity)
+  const barData = useMemo(() => {
+    const agentCounts = AGENTS.map(a => ({
+      label: a.id.slice(0, 3).toUpperCase(),
+      value: items.filter(i => i.agentId === a.id).length,
+      color: ['#FF3040', '#4fc3f7', '#e040fb', '#69f0ae', '#ffd740', '#ff6b35', '#b388ff'][AGENTS.indexOf(a)] || '#00E5FF',
+    }))
+    const max = Math.max(...agentCounts.map(a => a.value), 1)
+    return agentCounts.map(a => ({ ...a, pct: (a.value / max) * 100 }))
+  }, [items])
+
+  return (
+    <div style={{
+      width: 290, flexShrink: 0, height: '100%',
+      background: 'rgba(4,8,16,0.92)', borderLeft: '1px solid rgba(0,229,255,0.07)',
+      display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    }}>
+      {/* LIVE TELEMETRY header */}
+      <div style={{
+        padding: '10px 12px 8px', borderBottom: '1px solid rgba(0,229,255,0.06)',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 2, height: 12, background: '#00E5FF', boxShadow: '0 0 6px #00E5FF' }} />
+            <span style={{ fontFamily: 'var(--mono)', fontSize: '0.6rem', fontWeight: 700, letterSpacing: 3, color: '#fff' }}>
+              LIVE TELEMETRY
+            </span>
+          </div>
+          <span style={{
+            fontFamily: 'var(--mono)', fontSize: '0.38rem', letterSpacing: 2,
+            color: '#00E5FF', padding: '1px 5px', border: '1px solid rgba(0,229,255,0.2)',
+            borderRadius: 2, animation: 'pulse 2s ease infinite',
+          }}>
+            REAL-TIME
+          </span>
+        </div>
+      </div>
+
+      {/* Bar chart — signals per agent */}
+      <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 50, marginBottom: 4 }}>
+          {barData.map((bar, i) => (
+            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, height: '100%', justifyContent: 'flex-end' }}>
+              <div style={{
+                width: '100%', height: `${bar.pct}%`, minHeight: bar.value > 0 ? 3 : 0,
+                background: bar.color, borderRadius: '2px 2px 0 0', opacity: 0.8,
+                boxShadow: bar.value > 0 ? `0 0 6px ${bar.color}60` : 'none',
+                transition: 'height 0.5s ease',
+              }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {barData.map((bar, i) => (
+            <div key={i} style={{ flex: 1, textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.32rem', color: bar.color, letterSpacing: 0.5 }}>{bar.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Stats grid */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr',
+        gap: 1, borderBottom: '1px solid rgba(255,255,255,0.04)',
+        flexShrink: 0,
+      }}>
+        {[
+          { label: 'SIGNALS', value: String(totalSig), color: '#00E5FF' },
+          { label: 'CRITICAL', value: String(critCount), color: critCount > 0 ? '#FF3040' : '#00E676' },
+          { label: 'AI MODELS', value: String(modelsUsed.length || AI_MODELS.length), color: '#00E5FF' },
+          { label: 'CYCLE', value: `#${cycle}`, color: 'rgba(255,255,255,0.5)' },
+        ].map((stat, i) => (
+          <div key={i} style={{
+            padding: '8px 10px',
+            background: 'rgba(255,255,255,0.015)',
+            border: '1px solid rgba(255,255,255,0.03)',
+          }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.36rem', color: 'rgba(255,255,255,0.3)', letterSpacing: 1.5, marginBottom: 3 }}>
+              {stat.label}
+            </div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.82rem', fontWeight: 700, color: stat.color }}>
+              {stat.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Threat level + Defcon */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr',
+        gap: 1, borderBottom: '1px solid rgba(255,255,255,0.04)',
+        flexShrink: 0,
+      }}>
+        <div style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.03)' }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.36rem', color: 'rgba(255,255,255,0.3)', letterSpacing: 1.5, marginBottom: 3 }}>THREAT LEVEL</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.82rem', fontWeight: 700, color: threatLevel >= 7 ? '#FF3040' : '#FFB020' }}>
+            {threatLevel}/10
+          </div>
+        </div>
+        <div style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.03)' }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.36rem', color: 'rgba(255,255,255,0.3)', letterSpacing: 1.5, marginBottom: 3 }}>SECURITY</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.82rem', fontWeight: 700, color: defconColor }}>
+            DEFCON-{defcon}
+          </div>
+        </div>
+      </div>
+
+      {/* Analysis data — full display */}
+      {analysis && (
+        <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.04)', flexShrink: 0 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.36rem', color: 'rgba(0,229,255,0.4)', letterSpacing: 1.5, marginBottom: 5 }}>INTEL SUMMARY</div>
+
+          {analysis.situation_summary && (
+            <div style={{ fontFamily: 'var(--sans)', fontSize: '0.54rem', color: 'rgba(232,236,241,0.65)', lineHeight: 1.4, marginBottom: 6 }}>
+              {analysis.situation_summary}
+            </div>
+          )}
+
+          {/* Escalation + Nuclear risk bars */}
+          {(analysis.escalation_probability != null || analysis.nuclear_risk != null) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
+              {analysis.escalation_probability != null && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: '0.35rem', color: 'rgba(255,255,255,0.3)', letterSpacing: 1 }}>ESCALATION RISK</span>
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: '0.38rem', color: '#FFB020', fontWeight: 700 }}>{analysis.escalation_probability}%</span>
+                  </div>
+                  <div style={{ height: 2, background: 'rgba(255,255,255,0.06)', borderRadius: 1 }}>
+                    <div style={{ height: '100%', width: `${analysis.escalation_probability}%`, background: '#FFB020', borderRadius: 1, boxShadow: '0 0 4px #FFB020' }} />
+                  </div>
+                </div>
+              )}
+              {analysis.nuclear_risk != null && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: '0.35rem', color: 'rgba(255,255,255,0.3)', letterSpacing: 1 }}>NUCLEAR RISK</span>
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: '0.38rem', color: '#FF3040', fontWeight: 700 }}>{analysis.nuclear_risk}%</span>
+                  </div>
+                  <div style={{ height: 2, background: 'rgba(255,255,255,0.06)', borderRadius: 1 }}>
+                    <div style={{ height: '100%', width: `${analysis.nuclear_risk}%`, background: '#FF3040', borderRadius: 1, boxShadow: '0 0 4px #FF3040' }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Timeline last 24h */}
+          {analysis.timeline_last_24h?.length > 0 && (
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.35rem', color: 'rgba(0,229,255,0.35)', letterSpacing: 1.5, marginBottom: 3 }}>TIMELINE 24H</div>
+              {analysis.timeline_last_24h.slice(0, 3).map((ev: string, i: number) => (
+                <div key={i} style={{ display: 'flex', gap: 5, marginBottom: 2, alignItems: 'flex-start' }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: '0.35rem', color: '#00E5FF', flexShrink: 0, paddingTop: 2 }}>▸</span>
+                  <span style={{ fontFamily: 'var(--sans)', fontSize: '0.52rem', color: 'rgba(232,236,241,0.55)', lineHeight: 1.35 }}>{ev}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Key risks */}
+          {analysis.key_risks?.length > 0 && (
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.35rem', color: 'rgba(255,48,64,0.45)', letterSpacing: 1.5, marginBottom: 3 }}>KEY RISKS</div>
+              {analysis.key_risks.slice(0, 3).map((risk: string, i: number) => (
+                <div key={i} style={{ display: 'flex', gap: 5, marginBottom: 2, alignItems: 'flex-start' }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: '0.35rem', color: '#FF3040', flexShrink: 0, paddingTop: 2 }}>!</span>
+                  <span style={{ fontFamily: 'var(--sans)', fontSize: '0.52rem', color: 'rgba(232,236,241,0.5)', lineHeight: 1.35 }}>{risk}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Prediction */}
+          {analysis.next_hours_prediction && (
+            <div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.35rem', color: 'rgba(255,176,32,0.4)', letterSpacing: 1.5, marginBottom: 3 }}>NEXT 24H PREDICTION</div>
+              <div style={{ fontFamily: 'var(--sans)', fontSize: '0.52rem', color: 'rgba(232,236,241,0.5)', lineHeight: 1.4 }}>
+                {analysis.next_hours_prediction}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CONSOLE LOGS */}
+      <div style={{
+        padding: '8px 12px 4px', borderBottom: '1px solid rgba(255,255,255,0.04)',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', fontWeight: 700, letterSpacing: 2, color: 'rgba(255,255,255,0.6)' }}>
+            CONSOLE LOGS
+          </span>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '0.36rem', color: 'rgba(255,255,255,0.2)' }}>
+            {logs.length} entries
+          </span>
+        </div>
+      </div>
+
+      <div ref={logScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '4px 10px 8px' }}>
+        {logs.slice(-60).map((log, i) => {
+          const colors = { info: '#00E5FF', system: 'rgba(255,255,255,0.45)', error: '#FF3040', success: '#00E676', warn: '#FFB020' }
+          const c = colors[log.type as keyof typeof colors] || colors.info
+          return (
+            <div key={i} style={{ display: 'flex', gap: 5, marginBottom: 3, alignItems: 'flex-start' }}>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '0.38rem', color: 'rgba(0,229,255,0.3)', flexShrink: 0, paddingTop: 1 }}>
+                [{log.time || '--:--:--'}]
+              </span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '0.38rem', color: c, flexShrink: 0, paddingTop: 1 }}>
+                {log.type?.toUpperCase().slice(0, 4) || 'INFO'}
+              </span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '0.4rem', color: 'rgba(232,236,241,0.5)', lineHeight: 1.4 }}>
+                {log.message}
+              </span>
+            </div>
+          )
+        })}
+        {logs.length === 0 && (
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.42rem', color: 'rgba(0,229,255,0.2)', padding: '8px 0', letterSpacing: 1 }}>
+            $ Awaiting system output...
+          </div>
+        )}
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '0.4rem', color: 'rgba(0,229,255,0.25)', marginTop: 4 }}>
+          $ <span style={{ animation: 'pulse 1.2s ease infinite', display: 'inline-block', width: 6, height: 10, background: 'rgba(0,229,255,0.4)', verticalAlign: 'middle' }} />
+        </div>
+      </div>
+
+      {/* Command input */}
+      <div style={{
+        padding: '6px 10px', borderTop: '1px solid rgba(0,229,255,0.06)',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'rgba(0,229,255,0.4)' }}>$</span>
+          <input
+            value={cmd}
+            onChange={e => setCmd(e.target.value)}
+            placeholder="Enter command..."
+            style={{
+              flex: 1, background: 'transparent', border: 'none', outline: 'none',
+              fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'rgba(255,255,255,0.5)',
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════
+// GLOBE CENTER SECTION
+// ══════════════════════════════════════════════════════
+function GlobeSection({
+  items, selectedItem, onSelectItem, aircraft, fires,
+}: {
+  items: IntelItem[]; selectedItem: IntelItem | null;
+  onSelectItem: (item: IntelItem) => void;
+  aircraft: any[]; fires: any[];
+}) {
+  const critCount = items.filter(i => i.severity >= 4).length
+  const defcon = critCount > 5 ? '3' : critCount > 2 ? '4' : '5'
+  const defconColor = defcon === '3' ? '#FF3040' : defcon === '4' ? '#FFB020' : '#00E676'
+  const globalLoad = Math.min(99, 25 + items.length * 1.2)
+  const dataRate = (items.length * 0.04 + 0.5).toFixed(1)
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+      {/* Globe title */}
+      <div style={{
+        position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
+        zIndex: 10, display: 'flex', alignItems: 'center', gap: 8,
+        background: 'rgba(4,8,16,0.75)', backdropFilter: 'blur(12px)',
+        border: '1px solid rgba(0,229,255,0.08)', borderRadius: 4, padding: '3px 14px',
+        pointerEvents: 'none',
+      }}>
+        <span style={{ fontFamily: 'var(--display)', fontSize: '0.48rem', color: '#00E5FF', letterSpacing: 3 }}>
+          VISUALIZING::LIVE_ORBITS
+        </span>
+      </div>
+
+      {/* Globe */}
+      <div style={{ flex: 1 }}>
+        <Globe3D
+          intelItems={items}
+          onSelectEvent={onSelectItem}
+          selectedEvent={selectedItem}
+          aircraft={aircraft}
+          fires={fires}
+        />
+      </div>
+
+      {/* Bottom stats bar */}
+      <div style={{
+        position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
+        zIndex: 10, display: 'flex', alignItems: 'center', gap: 0,
+        background: 'rgba(4,8,16,0.85)', backdropFilter: 'blur(12px)',
+        border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden',
+      }}>
+        {[
+          { label: 'GLOBAL LOAD', value: `${globalLoad.toFixed(1)}%`, color: 'var(--accent)' },
+          { label: 'DATA RATE', value: `${dataRate}TB/s`, color: 'var(--accent)' },
+          { label: 'SECURITY', value: `DEFCON-${defcon}`, color: defconColor },
+        ].map((stat, i) => (
+          <div key={i} style={{
+            padding: '5px 16px', textAlign: 'center',
+            borderRight: i < 2 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+          }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.35rem', color: 'rgba(255,255,255,0.3)', letterSpacing: 2, marginBottom: 2 }}>
+              {stat.label}
+            </div>
+            <div style={{ fontFamily: 'var(--display)', fontSize: '0.7rem', fontWeight: 700, color: stat.color }}>
+              {stat.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Zoom controls */}
+      <div style={{
+        position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+        zIndex: 10, display: 'flex', flexDirection: 'column', gap: 4,
+      }}>
+        {['+', '−', '◎'].map((btn, i) => (
+          <button key={i} style={{
+            width: 28, height: 28, borderRadius: 4,
+            background: 'rgba(4,8,16,0.85)', backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(0,229,255,0.12)', color: '#00E5FF',
+            fontFamily: 'var(--mono)', fontSize: '0.7rem', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {btn}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════
+// EVENT DETAIL MODAL
+// ══════════════════════════════════════════════════════
+function EventDetailModal({ item, onClose }: { item: IntelItem; onClose: () => void }) {
+  const st = nodeStatus(item.severity)
+  const agentColors: Record<string, string> = {
+    sigint: '#FF3040', osint: '#4fc3f7', humint: '#e040fb',
+    geoint: '#69f0ae', econint: '#ffd740', proxy: '#ff6b35', diplo: '#b388ff',
+  }
+  const agColor = agentColors[item.agentId || 'osint'] || '#00E5FF'
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 2000,
+        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+      }}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 10 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 10 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'rgba(6,12,22,0.98)', border: `1px solid ${agColor}25`,
+          borderRadius: 8, padding: '20px 22px', maxWidth: 520, width: '100%',
+          boxShadow: `0 0 40px rgba(0,0,0,0.8), 0 0 0 1px ${agColor}15`,
+          borderLeft: `3px solid ${agColor}`,
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.48rem', color: agColor, letterSpacing: 2, marginBottom: 4 }}>
+              {(item.agentId || 'OSINT').toUpperCase()} / {item.category}
+            </div>
+            <div style={{ fontFamily: 'var(--sans)', fontSize: '0.85rem', fontWeight: 600, color: '#fff', lineHeight: 1.3 }}>
+              {item.headline}
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            marginLeft: 12, flexShrink: 0, background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 3, padding: '2px 8px', color: 'rgba(255,255,255,0.4)',
+            fontFamily: 'var(--mono)', fontSize: '0.5rem', cursor: 'pointer',
+          }}>×</button>
+        </div>
+
+        {/* Summary */}
+        <div style={{
+          fontFamily: 'var(--sans)', fontSize: '0.7rem', color: 'rgba(232,236,241,0.7)',
+          lineHeight: 1.6, marginBottom: 14, padding: '10px 12px',
+          background: 'rgba(255,255,255,0.025)', borderRadius: 4,
+          border: '1px solid rgba(255,255,255,0.05)',
+        }}>
+          {item.summary || 'No summary available.'}
+        </div>
+
+        {/* Meta grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+          {[
+            { label: 'SEVERITY', value: `${item.severity}/5 — ${st.label}`, color: st.color },
+            { label: 'SOURCE', value: item.source || 'Unknown', color: 'rgba(255,255,255,0.6)' },
+            { label: 'TIME', value: item.time || (item.fetchedAt ? timeAgo(item.fetchedAt) : '--'), color: '#00E5FF' },
+            { label: 'LOCATION', value: item.location || 'Unknown', color: 'rgba(255,255,255,0.5)' },
+            { label: 'VERIFIED', value: item.verified ? 'YES' : 'UNVERIFIED', color: item.verified ? '#00E676' : '#FFB020' },
+            { label: 'AI MODEL', value: item.aiModelName?.slice(0, 20) || '--', color: 'rgba(255,255,255,0.4)' },
+          ].map((m, i) => (
+            <div key={i} style={{ padding: '7px 8px', background: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.04)' }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.35rem', color: 'rgba(255,255,255,0.3)', letterSpacing: 1.5, marginBottom: 3 }}>{m.label}</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.48rem', color: m.color, lineHeight: 1.3 }}>{m.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Severity bar */}
+        <div style={{ height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${(item.severity / 5) * 100}%`, background: st.color, boxShadow: `0 0 8px ${st.color}` }} />
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ══════════════════════════════════════════════════════
+// WEBCAM / FEEDS MODAL
+// ══════════════════════════════════════════════════════
+function WebcamModal({ onClose }: { onClose: () => void }) {
+  const [activeTab, setActiveTab] = useState<'webcam' | 'news'>('webcam')
+  const [activeId, setActiveId] = useState(WEBCAM_FEEDS[0]?.id || '')
+  const [activeStream, setActiveStream] = useState(NEWS_STREAMS[0]?.id || '')
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 2000,
+        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+      }}
+    >
+      <motion.div
+        initial={{ scale: 0.95 }}
+        animate={{ scale: 1 }}
+        exit={{ scale: 0.95 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'rgba(4,8,16,0.98)', border: '1px solid rgba(0,229,255,0.1)',
+          borderRadius: 8, width: '90vw', maxWidth: 900, maxHeight: '85vh',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        }}
+      >
+        {/* Header */}
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {(['webcam', 'news'] as const).map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)} style={{
+                fontFamily: 'var(--mono)', fontSize: '0.5rem', letterSpacing: 2, fontWeight: 700,
+                padding: '4px 10px', borderRadius: 3, cursor: 'pointer',
+                background: activeTab === tab ? 'rgba(0,229,255,0.1)' : 'transparent',
+                border: `1px solid ${activeTab === tab ? 'rgba(0,229,255,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                color: activeTab === tab ? '#00E5FF' : 'rgba(255,255,255,0.35)',
+              }}>
+                {tab === 'webcam' ? 'LIVE WEBCAMS' : 'NEWS STREAMS'}
+              </button>
+            ))}
+          </div>
+          <button onClick={onClose} style={{
+            background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 3, padding: '3px 10px', color: 'rgba(255,255,255,0.4)',
+            fontFamily: 'var(--mono)', fontSize: '0.5rem', cursor: 'pointer',
+          }}>✕ CLOSE</button>
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 12, gap: 10 }}>
+          {/* Tab selector */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
+            {activeTab === 'webcam'
+              ? WEBCAM_FEEDS.map(f => (
+                  <button key={f.id} onClick={() => setActiveId(f.id)} style={{
+                    fontFamily: 'var(--mono)', fontSize: '0.42rem', letterSpacing: 1, padding: '3px 8px', borderRadius: 3, cursor: 'pointer',
+                    background: activeId === f.id ? 'rgba(0,229,255,0.1)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${activeId === f.id ? 'rgba(0,229,255,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                    color: activeId === f.id ? '#00E5FF' : 'rgba(255,255,255,0.35)',
+                  }}>
+                    {f.flag} {f.city}
+                  </button>
+                ))
+              : NEWS_STREAMS.map(s => (
+                  <button key={s.id} onClick={() => setActiveStream(s.id)} style={{
+                    fontFamily: 'var(--mono)', fontSize: '0.42rem', letterSpacing: 1, padding: '3px 8px', borderRadius: 3, cursor: 'pointer',
+                    background: activeStream === s.id ? `${s.color}15` : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${activeStream === s.id ? `${s.color}40` : 'rgba(255,255,255,0.06)'}`,
+                    color: activeStream === s.id ? s.color : 'rgba(255,255,255,0.35)',
+                  }}>
+                    {s.name}
+                  </button>
+                ))
+            }
+          </div>
+
+          {/* Embed */}
+          <div style={{ flex: 1, borderRadius: 6, overflow: 'hidden', background: '#000', position: 'relative', minHeight: 400 }}>
+            <iframe
+              key={activeTab === 'webcam' ? activeId : activeStream}
+              src={`https://www.youtube.com/embed/${activeTab === 'webcam' ? activeId : activeStream}?autoplay=1&mute=1&controls=1&rel=0&modestbranding=1&playsinline=1`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+            />
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ══════════════════════════════════════════════════════
+// BOTTOM STATUS BAR
+// ══════════════════════════════════════════════════════
+function StatusBar({
+  totalItems, critCount, selectedCoords, agentsRunning,
+}: {
+  totalItems: number; critCount: number; selectedCoords: { lat?: number; lng?: number } | null; agentsRunning: boolean;
+}) {
+  return (
+    <div style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0, height: 22, zIndex: 900,
+      background: 'rgba(4,8,16,0.97)', borderTop: '1px solid rgba(0,229,255,0.06)',
+      display: 'flex', alignItems: 'center', padding: '0 14px', gap: 16,
+      fontFamily: 'var(--mono)', fontSize: '0.42rem',
+    }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: agentsRunning ? '#00E676' : 'rgba(0,229,255,0.5)' }}>
+        <div style={{ width: 4, height: 4, borderRadius: '50%', background: agentsRunning ? '#00E676' : '#00E5FF', animation: 'pulse 2s ease infinite' }} />
+        GLOBAL MESH: {agentsRunning ? 'ONLINE' : 'STANDBY'}
+      </span>
+
+      <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
+
+      <span style={{ color: critCount > 0 ? '#FF3040' : 'rgba(255,255,255,0.35)' }}>
+        ALERTS: {critCount > 0 ? <span style={{ animation: 'alertFlash 1.5s ease infinite' }}>{critCount} ACTIVE</span> : '0 ACTIVE'}
+      </span>
+
+      <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
+
+      <span style={{ color: 'rgba(255,255,255,0.3)' }}>SIGNALS: {totalItems}</span>
+
+      <div style={{ flex: 1 }} />
+
+      {selectedCoords && (
+        <span style={{ color: 'rgba(0,229,255,0.4)' }}>
+          COORD: {selectedCoords.lat?.toFixed(4)}° N, {selectedCoords.lng?.toFixed(4)}° E
+        </span>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════
+// BREAKING NEWS TICKER
+// ══════════════════════════════════════════════════════
+function BreakingTicker({ items = [] }: { items: BreakingItem[] }) {
+  if (!items.length) return null
+  const doubled = [...items, ...items]
+  return (
+    <div style={{
+      position: 'fixed', bottom: 22, left: 0, right: 0, height: 24, zIndex: 900,
+      background: 'rgba(4,8,16,0.97)', borderTop: '1px solid rgba(255,48,64,0.1)',
       display: 'flex', alignItems: 'center', overflow: 'hidden',
     }}>
-      <div style={{
-        padding: '0 10px', fontFamily: 'var(--display)', fontSize: '0.5rem', fontWeight: 700,
-        color: '#FF3040', letterSpacing: 3, flexShrink: 0, animation: 'alertFlash 2s ease infinite',
-      }}>
+      <div style={{ padding: '0 10px', fontFamily: 'var(--display)', fontSize: '0.45rem', fontWeight: 700, color: '#FF3040', letterSpacing: 3, flexShrink: 0, animation: 'alertFlash 2s ease infinite' }}>
         BREAKING
       </div>
       <div style={{ width: 1, height: 12, background: 'rgba(255,48,64,0.2)', flexShrink: 0 }} />
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        <div style={{
-          display: 'flex',
-          animation: `tickerScroll ${Math.max(items.length * 8, 40)}s linear infinite`,
-          whiteSpace: 'nowrap',
-        }}>
+        <div style={{ display: 'flex', animation: `tickerScroll ${Math.max(doubled.length * 8, 40)}s linear infinite`, whiteSpace: 'nowrap' }}>
           {doubled.map((item, i) => (
-            <span key={i} style={{
-              fontFamily: 'var(--mono)', fontSize: '0.6rem', color: 'var(--text-primary)',
-              marginRight: 40, display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}>
-              <SeverityDot level={item.severity || 3} size={3} />
+            <span key={i} style={{ fontFamily: 'var(--mono)', fontSize: '0.52rem', color: 'rgba(232,236,241,0.75)', marginRight: 40, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 4, height: 4, borderRadius: '50%', background: item.severity >= 4 ? '#FF3040' : '#FFB020', display: 'inline-block' }} />
               {item.text || item.title}
             </span>
           ))}
@@ -204,1026 +1014,244 @@ function BreakingTicker({ items = [] }: { items: BreakingItem[] }) {
   )
 }
 
-// ── Event Feed Card (monitor-the-situation style) ──
-function EventCard({
-  item, onClick, isSelected, index,
-}: {
-  item: IntelItem; onClick?: (i: IntelItem) => void; isSelected: boolean; index: number
-}) {
-  const sev = SEVERITY_CONFIG[item.severity as keyof typeof SEVERITY_CONFIG] || SEVERITY_CONFIG[3]
-  const agent = AGENTS.find((a) => a.id === item.agentId)
-  const sevClass = item.severity >= 5 ? 'event-card--critical' : item.severity >= 4 ? 'event-card--high' : item.severity >= 3 ? 'event-card--medium' : ''
-
+// ══════════════════════════════════════════════════════
+// API KEY SETUP
+// ══════════════════════════════════════════════════════
+function SetupModal({ onConfirm }: { onConfirm: (key: string) => void }) {
+  const [key, setKey] = useState('')
   return (
-    <div
-      className={`event-card ${sevClass} ${isSelected ? 'event-card--selected' : ''}`}
-      onClick={() => onClick?.(item)}
-      style={{
-        borderLeftColor: sev.color,
-        animationDelay: `${Math.min(index * 0.03, 0.5)}s`,
-      }}
-    >
-      {/* Top: Agent + Severity + Time */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-        {agent && (
-          <span style={{
-            fontFamily: 'var(--mono)', fontSize: '0.48rem', fontWeight: 700,
-            color: agent.color, letterSpacing: 1, opacity: 0.9,
-          }}>
-            {agent.icon} {agent.name}
-          </span>
-        )}
-        <SeverityBadge level={item.severity} />
-        <span style={{
-          marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: '0.45rem',
-          color: 'var(--accent)', opacity: 0.6,
-        }}>
-          {item.time}
-        </span>
-      </div>
-
-      {/* Headline */}
-      <div style={{
-        fontFamily: 'var(--sans)', fontSize: '0.73rem', fontWeight: 600,
-        color: 'var(--text-primary)', lineHeight: 1.35, marginBottom: 3,
-      }}>
-        {item.headline}
-      </div>
-
-      {/* Summary (truncated) */}
-      {item.summary && (
-        <div style={{
-          fontFamily: 'var(--sans)', fontSize: '0.62rem', color: 'var(--text-muted)',
-          lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical', overflow: 'hidden',
-        }}>
-          {item.summary}
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(2,5,10,0.98)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div style={{ textAlign: 'center', maxWidth: 440, padding: '0 20px' }}>
+        <div style={{ fontFamily: 'var(--display)', fontSize: '1.2rem', fontWeight: 800, letterSpacing: 4, color: '#fff', marginBottom: 6 }}>
+          INTEL<span style={{ color: '#00E5FF' }}>-LIVE</span>
         </div>
-      )}
-
-      {/* Image */}
-      {item.image && (
-        <img src={item.image} alt="" style={{
-          width: '100%', height: 70, objectFit: 'cover', borderRadius: 3,
-          marginTop: 4, opacity: 0.75, border: '1px solid rgba(255,255,255,0.04)',
-        }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'rgba(0,229,255,0.4)', letterSpacing: 3, marginBottom: 24 }}>V5.0.2 — INTELLIGENCE COMMAND SYSTEM</div>
+        <div style={{ fontFamily: 'var(--sans)', fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: 20, lineHeight: 1.6 }}>
+          Enter your OpenRouter API key to activate AI agents.<br />
+          Keys are stored locally and never sent to our servers.
+        </div>
+        <input
+          value={key}
+          onChange={e => setKey(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && key.trim() && onConfirm(key.trim())}
+          placeholder="sk-or-v1-..."
+          style={{
+            width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(0,229,255,0.2)',
+            borderRadius: 4, padding: '10px 14px', fontFamily: 'var(--mono)', fontSize: '0.6rem',
+            color: '#fff', outline: 'none', marginBottom: 12,
+          }}
         />
-      )}
-
-      {/* Footer: Source + Location */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-        {item.source && (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'var(--text-dim)' }}>
-            {item.source}
-          </span>
-        )}
-        {item.location && (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'var(--accent)', opacity: 0.5 }}>
-            {item.location}
-          </span>
-        )}
-        <span style={{
-          marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: '0.4rem',
-          color: 'var(--text-dim)', letterSpacing: 1,
-        }}>
-          CLICK FOR DETAILS
-        </span>
-      </div>
-    </div>
-  )
-}
-
-// ── RSS Card ──
-function RSSCard({ article, index }: { article: RSSArticle; index: number }) {
-  const keywords = ['iran', 'israel', 'military', 'strike', 'missile', 'houthi', 'hezbollah', 'gulf', 'nuclear', 'war', 'attack', 'bomb', 'drone', 'navy']
-  const text = `${article.title} ${article.description}`.toLowerCase()
-  const severity = text.includes('strike') || text.includes('attack') || text.includes('bomb') ? 5 :
-    text.includes('missile') || text.includes('military') ? 4 :
-    text.includes('nuclear') || text.includes('war') ? 4 :
-    keywords.some((k) => text.includes(k)) ? 3 : 2
-  const sev = SEVERITY_CONFIG[severity as keyof typeof SEVERITY_CONFIG] || SEVERITY_CONFIG[3]
-  const timeAgo = article.pubDate ? getTimeAgo(new Date(article.pubDate)) : ''
-
-  return (
-    <a
-      href={article.link}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="event-card"
-      style={{
-        display: 'block', borderLeftColor: sev.color, textDecoration: 'none', color: 'inherit',
-        animationDelay: `${Math.min(index * 0.02, 0.4)}s`,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.48rem', fontWeight: 700, color: '#06b6d4', letterSpacing: 1 }}>RSS</span>
-        <SeverityBadge level={severity} />
-        <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'var(--text-dim)' }}>{timeAgo}</span>
-      </div>
-      <div style={{ fontFamily: 'var(--sans)', fontSize: '0.73rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.35, marginBottom: 2 }}>
-        {article.title}
-      </div>
-      {article.description && (
-        <div style={{
-          fontFamily: 'var(--sans)', fontSize: '0.62rem', color: 'var(--text-muted)', lineHeight: 1.4,
-          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-        }}>
-          {article.description}
-        </div>
-      )}
-      {article.image && (
-        <img src={article.image} alt="" style={{ width: '100%', height: 70, objectFit: 'cover', borderRadius: 3, marginTop: 4, opacity: 0.7 }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'var(--text-dim)' }}>{article.source}</span>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.4rem', color: 'var(--accent)', opacity: 0.5, marginLeft: 'auto' }}>READ ↗</span>
-      </div>
-    </a>
-  )
-}
-
-// ── Event Detail Modal (fullscreen overlay) ──
-function EventDetailModal({
-  item, onClose, onVerify, verification,
-}: {
-  item: IntelItem; onClose: () => void;
-  onVerify?: (i: IntelItem) => void;
-  verification?: VerificationResult | { loading: boolean } | { error: boolean } | null
-}) {
-  const sev = SEVERITY_CONFIG[item.severity as keyof typeof SEVERITY_CONFIG] || SEVERITY_CONFIG[3]
-  const agent = AGENTS.find((a) => a.id === item.agentId)
-  const searchQuery = encodeURIComponent(item.headline)
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 2000,
-        background: 'rgba(5,10,18,0.85)', backdropFilter: 'blur(24px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 10 }}
-        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '90%', maxWidth: 560, maxHeight: '85vh', overflow: 'auto',
-          background: 'rgba(10,16,28,0.97)', border: `1px solid ${sev.color}25`,
-          borderRadius: 8, boxShadow: `0 0 60px rgba(0,0,0,0.5), 0 0 20px ${sev.color}10`,
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          padding: '14px 18px', borderBottom: `1px solid ${sev.color}15`,
-          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-        }}>
-          <div style={{ flex: 1, paddingRight: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-              <SeverityBadge level={item.severity} />
-              {agent && (
-                <span style={{ fontFamily: 'var(--mono)', fontSize: '0.55rem', color: agent.color }}>
-                  {agent.icon} {agent.fullName}
-                </span>
-              )}
-              {item.time && (
-                <span style={{ fontFamily: 'var(--mono)', fontSize: '0.48rem', color: 'var(--text-dim)' }}>{item.time}</span>
-              )}
-            </div>
-            <div style={{ fontFamily: 'var(--heading)', fontSize: '1rem', fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>
-              {item.headline}
-            </div>
-          </div>
-          <button onClick={onClose} style={{
-            fontFamily: 'var(--mono)', fontSize: '1.1rem', color: 'var(--text-dim)',
-            padding: '2px 6px', cursor: 'pointer', flexShrink: 0,
-            border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4,
-          }}>
-            ✕
-          </button>
-        </div>
-
-        {/* Image */}
-        {item.image && (
-          <div style={{ padding: '0 18px', marginTop: 10 }}>
-            <img src={item.image} alt="" style={{
-              width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 6,
-              border: '1px solid rgba(255,255,255,0.04)',
-            }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-          </div>
-        )}
-
-        {/* Body */}
-        <div style={{ padding: '14px 18px' }}>
-          <p style={{ fontFamily: 'var(--sans)', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 16 }}>
-            {item.summary}
-          </p>
-
-          {/* Info grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 16 }}>
-            {[
-              { label: 'SOURCE', value: item.source },
-              { label: 'TIME', value: item.time },
-              { label: 'LOCATION', value: item.location },
-              { label: 'AI MODEL', value: item.aiModelName },
-            ].filter((m) => m.value).map((m) => (
-              <div key={m.label} style={{
-                padding: '7px 10px', background: 'rgba(255,255,255,0.02)',
-                borderRadius: 4, border: '1px solid rgba(255,255,255,0.03)',
-              }}>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: '0.4rem', color: 'var(--text-dim)', letterSpacing: 2, marginBottom: 2 }}>{m.label}</div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: '0.65rem', color: 'var(--text-primary)' }}>{m.value}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Direct source link */}
-          {item.link && (
-            <a href={item.link} target="_blank" rel="noopener noreferrer" style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              width: '100%', padding: '10px', marginBottom: 12, borderRadius: 4,
-              background: 'rgba(0,229,255,0.05)', border: '1px solid rgba(0,229,255,0.15)',
-              fontFamily: 'var(--mono)', fontSize: '0.65rem', fontWeight: 700, letterSpacing: 2,
-              color: 'var(--accent)', textDecoration: 'none',
-            }}>
-              READ FULL ARTICLE ↗
-            </a>
-          )}
-
-          {/* Search links */}
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.4rem', color: 'var(--text-dim)', letterSpacing: 2, marginBottom: 6 }}>FIND FULL STORY</div>
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              {[
-                { label: 'Google News', url: `https://news.google.com/search?q=${searchQuery}`, color: '#4285f4' },
-                { label: 'X / Twitter', url: `https://x.com/search?q=${searchQuery}&f=live`, color: '#1da1f2' },
-                { label: 'YouTube', url: `https://www.youtube.com/results?search_query=${searchQuery}&sp=CAI%253D`, color: '#ff0000' },
-                { label: 'Reuters', url: `https://www.reuters.com/search/news?query=${searchQuery}`, color: '#ff8000' },
-              ].map((link) => (
-                <a key={link.label} href={link.url} target="_blank" rel="noopener noreferrer" style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 8px',
-                  borderRadius: 3, fontSize: '0.5rem', fontFamily: 'var(--mono)', fontWeight: 600,
-                  color: link.color, background: `${link.color}08`, border: `1px solid ${link.color}18`,
-                  textDecoration: 'none', letterSpacing: 0.5,
-                }}>
-                  {link.label} ↗
-                </a>
-              ))}
-            </div>
-          </div>
-
-          {/* Verify button */}
-          {!verification && (
-            <button onClick={() => onVerify?.(item)} style={{
-              width: '100%', padding: '9px', fontFamily: 'var(--mono)', fontSize: '0.6rem',
-              letterSpacing: 2, color: 'var(--accent)', border: '1px solid rgba(0,229,255,0.15)',
-              borderRadius: 4, background: 'rgba(0,229,255,0.03)', cursor: 'pointer',
-            }}>
-              CROSS-VERIFY WITH {AI_MODELS.length} AI MODELS
-            </button>
-          )}
-
-          {'loading' in (verification || {}) && (
-            <div style={{ padding: 14, textAlign: 'center' }}>
-              <div className="spin-loading" style={{ margin: '0 auto 8px' }} />
-              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.55rem', color: 'var(--text-dim)', letterSpacing: 2 }}>VERIFYING...</div>
-            </div>
-          )}
-
-          {verification && !('loading' in verification) && !('error' in verification) && (
-            <div style={{
-              padding: 10, borderRadius: 4, marginTop: 10,
-              border: `1px solid ${(verification as VerificationResult).verified ? '#00E67620' : '#FF304020'}`,
-              background: (verification as VerificationResult).verified ? 'rgba(0,230,118,0.03)' : 'rgba(255,48,64,0.03)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{
-                  fontFamily: 'var(--mono)', fontSize: '0.6rem', fontWeight: 700,
-                  color: (verification as VerificationResult).verified ? '#00E676' : '#FF3040',
-                }}>
-                  {(verification as VerificationResult).crossVerification?.consensus || 'VERIFIED'}
-                </span>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: 'var(--text-muted)' }}>
-                  Confidence: {(verification as VerificationResult).confidence}%
-                </span>
-              </div>
-              {(verification as VerificationResult).corroborating_sources?.length > 0 && (
-                <div style={{ fontFamily: 'var(--mono)', fontSize: '0.5rem', color: 'var(--text-secondary)' }}>
-                  Sources: {(verification as VerificationResult).corroborating_sources.join(', ')}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </motion.div>
-    </motion.div>
-  )
-}
-
-// ── Agent Status Grid ──
-function AgentStatusGrid({ agentStatuses }: { agentStatuses: AgentStatusMap }) {
-  return (
-    <div style={{ display: 'flex', gap: 4, padding: '6px 12px', flexWrap: 'wrap' }}>
-      {AGENTS.map((agent) => {
-        const st = agentStatuses[agent.id]
-        const isRunning = st?.status === 'running'
-        const isDone = st?.status === 'done'
-        const isError = st?.status === 'error'
-        const statusColor = isRunning ? 'var(--accent)' : isDone ? '#00E676' : isError ? '#FF3040' : 'var(--text-dim)'
-
-        return (
-          <div
-            key={agent.id}
-            title={`${agent.fullName}: ${st?.message || 'pending'}`}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => key.trim() && onConfirm(key.trim())}
             style={{
-              display: 'flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 3,
-              background: isRunning ? 'rgba(0,229,255,0.04)' : 'rgba(255,255,255,0.01)',
-              border: `1px solid ${isRunning ? 'rgba(0,229,255,0.1)' : 'rgba(255,255,255,0.03)'}`,
+              flex: 1, fontFamily: 'var(--mono)', fontSize: '0.55rem', letterSpacing: 2, fontWeight: 700,
+              color: '#00E5FF', padding: '10px 14px', border: '1px solid rgba(0,229,255,0.35)',
+              borderRadius: 4, background: 'rgba(0,229,255,0.08)', cursor: 'pointer',
             }}
           >
-            <span style={{
-              width: 4, height: 4, borderRadius: '50%', background: statusColor,
-              animation: isRunning ? 'pulse 1s ease infinite' : 'none',
-            }} />
-            <span style={{
-              fontFamily: 'var(--mono)', fontSize: '0.45rem', fontWeight: 600,
-              letterSpacing: 1, color: statusColor,
-            }}>
-              {agent.name}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ── Analysis Panel ──
-function AnalysisPanel({ analysis }: { analysis: AnalysisResult }) {
-  const tColor = analysis.threat_level >= 7 ? '#FF3040' : analysis.threat_level >= 4 ? '#FFB020' : '#00E676'
-  return (
-    <div style={{ padding: '12px 14px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <div style={{
-          width: 42, height: 42, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: 'var(--display)', fontSize: '1.1rem', fontWeight: 800, color: tColor,
-          border: `2px solid ${tColor}30`, background: `${tColor}08`,
-          animation: 'pulseGlow 2s ease infinite',
-        }}>
-          {analysis.threat_level}
-        </div>
-        <div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.6rem', fontWeight: 700, letterSpacing: 2, color: tColor }}>
-            {analysis.threat_label}
-          </div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'var(--text-dim)' }}>
-            Escalation: {analysis.escalation_probability}% | Nuclear: {analysis.nuclear_risk}%
-          </div>
-        </div>
-      </div>
-      <p style={{ fontFamily: 'var(--sans)', fontSize: '0.72rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>
-        {analysis.situation_summary}
-      </p>
-      {analysis.breaking_alerts?.map((alert, i) => (
-        <div key={i} style={{
-          padding: '5px 8px', marginBottom: 3, borderRadius: 3,
-          background: 'rgba(255,48,64,0.03)', borderLeft: '2px solid #FF3040',
-          fontFamily: 'var(--mono)', fontSize: '0.6rem', color: 'var(--text-primary)',
-        }}>
-          {alert}
-        </div>
-      ))}
-      {analysis.key_risks?.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: '0.4rem', color: 'var(--text-dim)', letterSpacing: 2, marginBottom: 4 }}>KEY RISKS</div>
-          {analysis.key_risks.map((risk, i) => (
-            <div key={i} style={{
-              padding: '3px 0', fontFamily: 'var(--sans)', fontSize: '0.65rem',
-              color: 'var(--text-secondary)', display: 'flex', gap: 5,
-            }}>
-              <span style={{ color: '#FFB020', flexShrink: 0 }}>●</span>{risk}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Webcams Panel ──
-function WebcamsPanel() {
-  const [activeCam, setActiveCam] = useState<{ id: string; name: string } | null>(null)
-  const [activeTab, setActiveTab] = useState<'cams' | 'news'>('cams')
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-        {[{ id: 'cams', label: 'LIVE CAMS' }, { id: 'news', label: 'NEWS TV' }].map((tab) => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id as 'cams' | 'news')} style={{
-            flex: 1, padding: '6px 0', fontFamily: 'var(--mono)', fontSize: '0.48rem', fontWeight: 700, letterSpacing: 2,
-            color: activeTab === tab.id ? '#ef4444' : 'var(--text-dim)',
-            borderBottom: activeTab === tab.id ? '2px solid #ef4444' : '2px solid transparent', cursor: 'pointer',
-          }}>
-            {tab.label}
+            ESTABLISH UPLINK
           </button>
-        ))}
-      </div>
-
-      {/* Active player */}
-      {activeCam && (
-        <div style={{ flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-          <div style={{ position: 'relative', paddingTop: '56.25%', background: '#000' }}>
-            <iframe
-              src={`https://www.youtube-nocookie.com/embed/${activeCam.id}?autoplay=1&mute=1&controls=1&rel=0&modestbranding=1&playsinline=1`}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#ef4444', animation: 'pulse 2s ease infinite' }} />
-              <span style={{ fontFamily: 'var(--mono)', fontSize: '0.48rem', color: '#ef4444', fontWeight: 700 }}>LIVE</span>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'var(--text-muted)' }}>{activeCam.name}</span>
-            </div>
-            <button onClick={() => setActiveCam(null)} style={{
-              fontFamily: 'var(--mono)', fontSize: '0.65rem', color: 'var(--text-dim)', cursor: 'pointer',
-            }}>✕</button>
-          </div>
+          <button
+            onClick={() => onConfirm('server-side')}
+            style={{
+              fontFamily: 'var(--mono)', fontSize: '0.55rem', letterSpacing: 1, fontWeight: 600,
+              color: 'rgba(255,255,255,0.35)', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 4, background: 'transparent', cursor: 'pointer',
+            }}
+          >
+            USE SERVER KEY
+          </button>
         </div>
-      )}
-
-      {/* Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '4px' }}>
-        {activeTab === 'cams' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
-            {WEBCAM_FEEDS.map((cam) => (
-              <div
-                key={cam.id}
-                onClick={() => setActiveCam(cam)}
-                style={{
-                  borderRadius: 4, overflow: 'hidden', cursor: 'pointer',
-                  border: '1px solid rgba(255,255,255,0.04)', background: '#0a0e14',
-                  transition: 'border-color 0.15s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(239,68,68,0.2)')}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)')}
-              >
-                <div style={{ position: 'relative', height: 55, background: '#0d1117' }}>
-                  <img
-                    src={`https://img.youtube.com/vi/${cam.id}/mqdefault.jpg`}
-                    alt={cam.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                  />
-                  <div style={{
-                    position: 'absolute', top: 2, left: 2, display: 'flex', alignItems: 'center',
-                    gap: 2, padding: '1px 4px', borderRadius: 2,
-                    background: 'rgba(0,0,0,0.8)', border: '1px solid rgba(239,68,68,0.3)',
-                  }}>
-                    <span style={{ width: 3, height: 3, borderRadius: '50%', background: '#ef4444', animation: 'pulse 2s ease infinite' }} />
-                    <span style={{ fontFamily: 'var(--mono)', fontSize: '0.33rem', color: '#ef4444', fontWeight: 700 }}>LIVE</span>
-                  </div>
-                  <div style={{ position: 'absolute', top: 2, right: 2, fontSize: '0.55rem' }}>{cam.flag}</div>
-                </div>
-                <div style={{ padding: '2px 4px' }}>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: '0.43rem', fontWeight: 600, color: '#e2e8f0' }}>{cam.name}</div>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: '0.35rem', color: 'rgba(255,255,255,0.25)' }}>{cam.city}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {NEWS_STREAMS.map((stream) => (
-              <div
-                key={stream.id}
-                onClick={() => setActiveCam({ id: stream.id, name: stream.name })}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
-                  borderRadius: 4, border: `1px solid ${stream.color}15`, background: '#0a0e14',
-                  cursor: 'pointer', transition: 'border-color 0.15s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = `${stream.color}40`)}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = `${stream.color}15`)}
-              >
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: stream.color, animation: 'pulse 2s ease infinite' }} />
-                <span style={{ fontFamily: 'var(--mono)', fontSize: '0.55rem', fontWeight: 700, color: stream.color }}>{stream.name}</span>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: '0.4rem', color: 'var(--text-dim)', marginLeft: 'auto' }}>24/7</span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   )
 }
 
-// ── Console Logs ──
-function ConsoleLogs({ items, agentStatuses }: { items: IntelItem[]; agentStatuses: AgentStatusMap }) {
-  const [logs, setLogs] = useState<{ time: string; msg: string; type: string }[]>([])
-  const scrollRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date().toISOString().slice(11, 19)
-      const messages = [
-        { msg: 'Scanning global threat feeds...', type: 'sys' },
-        { msg: 'Processing RSS intelligence...', type: 'info' },
-        { msg: `Active signals: ${items.length}`, type: 'info' },
-        { msg: 'Crossreferencing event sources...', type: 'sys' },
-        { msg: 'Satellite imagery scan complete.', type: 'info' },
-        { msg: 'Monitoring Strait of Hormuz...', type: 'sys' },
-        { msg: 'Checking OSINT network updates...', type: 'sys' },
-      ]
-      const runningAgents = Object.entries(agentStatuses).filter(([, s]) => s?.status === 'running')
-      if (runningAgents.length > 0) {
-        const [id] = runningAgents[Math.floor(Math.random() * runningAgents.length)]
-        messages.push({ msg: `Agent ${id.toUpperCase()} collecting intel...`, type: 'info' })
-      }
-      const msg = messages[Math.floor(Math.random() * messages.length)]
-      setLogs(prev => [...prev.slice(-25), { time: now, ...msg }])
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [items.length, agentStatuses])
-
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [logs])
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{
-        padding: '6px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      }}>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.48rem', color: 'var(--text-dim)', letterSpacing: 2 }}>
-          CONSOLE LOGS
-        </span>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.4rem', color: 'var(--accent)', opacity: 0.5 }}>
-          LIVE
-        </span>
-      </div>
-      <div ref={scrollRef} style={{ flex: 1, overflow: 'auto', padding: '4px 10px' }}>
-        {logs.map((log, i) => (
-          <div key={i} className="console-line" style={{
-            color: log.type === 'info' ? 'var(--accent)' : log.type === 'warn' ? 'var(--warning)' :
-              log.type === 'error' ? 'var(--alert)' : 'var(--text-dim)',
-          }}>
-            <span style={{ color: 'var(--text-dim)', marginRight: 6 }}>[{log.time}]</span>
-            <span style={{ color: log.type === 'info' ? '#00E5FF' : log.type === 'warn' ? '#FFB020' : 'var(--text-muted)', fontWeight: 600 }}>
-              {log.type.toUpperCase()}:
-            </span>{' '}
-            <span style={{ color: 'var(--text-secondary)' }}>{log.msg}</span>
-          </div>
-        ))}
-        <span style={{ display: 'inline-block', width: 6, height: 12, background: 'var(--accent)', opacity: 0.7, animation: 'blink 1s step-end infinite', marginLeft: 2 }} />
-      </div>
-    </div>
-  )
-}
-
-// ── Live Telemetry Panel ──
-function TelemetryPanel({ items, liveData }: { items: IntelItem[]; liveData: any }) {
-  const criticalCount = items.filter(i => i.severity >= 5).length
-  const highCount = items.filter(i => i.severity >= 4).length
-
-  return (
-    <div style={{ padding: '10px 12px' }}>
-      <div style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'var(--text-dim)', letterSpacing: 2, marginBottom: 8 }}>
-        LIVE TELEMETRY
-      </div>
-
-      {/* Stats grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5, marginBottom: 10 }}>
-        {[
-          { label: 'SIGNALS', value: items.length.toString(), color: 'var(--accent)' },
-          { label: 'CRITICAL', value: criticalCount.toString(), color: '#FF3040' },
-          { label: 'AIRCRAFT', value: (liveData.aircraft?.length || 0).toString(), color: '#22D3EE' },
-          { label: 'FIRES', value: (liveData.fires?.length || 0).toString(), color: '#F97316' },
-        ].map((stat) => (
-          <div key={stat.label} style={{
-            padding: '6px 8px', background: 'rgba(255,255,255,0.02)',
-            borderRadius: 3, border: '1px solid rgba(255,255,255,0.03)',
-          }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.38rem', color: 'var(--text-dim)', letterSpacing: 2 }}>
-              {stat.label}
-            </div>
-            <div style={{ fontFamily: 'var(--display)', fontSize: '0.9rem', fontWeight: 700, color: stat.color }}>
-              {stat.value}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Severity distribution bar */}
-      <div style={{ fontFamily: 'var(--mono)', fontSize: '0.38rem', color: 'var(--text-dim)', letterSpacing: 2, marginBottom: 4 }}>
-        SEVERITY DISTRIBUTION
-      </div>
-      <div style={{ display: 'flex', gap: 2, height: 3, marginBottom: 10, borderRadius: 2, overflow: 'hidden' }}>
-        {[5, 4, 3, 2, 1].map((sev) => {
-          const count = items.filter(i => i.severity === sev).length
-          const pct = items.length > 0 ? (count / items.length) * 100 : 0
-          const colors: Record<number, string> = { 5: '#FF3040', 4: '#FFB020', 3: '#FFD60A', 2: '#00E676', 1: '#00E676' }
-          return <div key={sev} style={{ width: `${pct}%`, background: colors[sev], minWidth: pct > 0 ? 2 : 0, transition: 'width 0.5s' }} />
-        })}
-      </div>
-
-      {/* Recent high-severity alerts */}
-      <div style={{ fontFamily: 'var(--mono)', fontSize: '0.38rem', color: 'var(--text-dim)', letterSpacing: 2, marginBottom: 4 }}>
-        HIGH PRIORITY ALERTS
-      </div>
-      {items.filter(i => i.severity >= 4).slice(0, 4).map((item, i) => (
-        <div key={i} style={{
-          padding: '4px 6px', marginBottom: 2, borderRadius: 3,
-          borderLeft: `2px solid ${SEVERITY_CONFIG[item.severity as keyof typeof SEVERITY_CONFIG]?.color || '#FFB020'}`,
-          background: 'rgba(255,255,255,0.01)',
-        }}>
-          <div style={{
-            fontFamily: 'var(--mono)', fontSize: '0.5rem', color: 'var(--text-primary)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {item.headline}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 // MAIN DASHBOARD
-// ════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 export default function LiveIntelDashboard() {
-  const [intel, setIntel] = useState<IntelMap>({})
-  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
-  const [breaking, setBreaking] = useState<BreakingItem[]>([])
-  const [agentStatuses, setAgentStatuses] = useState<AgentStatusMap>({})
-  const [cycle, setCycle] = useState(0)
-  const [modelsUsed, setModelsUsed] = useState<string[]>([])
-  const [selectedEvent, setSelectedEvent] = useState<IntelItem | null>(null)
-  const [verifications, setVerifications] = useState<Record<string, VerificationResult | { loading: boolean } | { error: boolean }>>({})
-  const [leftTab, setLeftTab] = useState<'signals' | 'news' | 'analysis'>('signals')
-  const [rightTab, setRightTab] = useState<'telemetry' | 'webcams' | 'console'>('telemetry')
-  const [leftOpen, setLeftOpen] = useState(true)
-  const [rightOpen, setRightOpen] = useState(true)
-  const [rssArticles, setRssArticles] = useState<RSSArticle[]>([])
-  const [rssLoading, setRssLoading] = useState(true)
+  const [state, setState] = useState<DashState>({
+    intel: {}, analysis: null, breaking: [], logs: [],
+    agentStatus: {}, modelsUsed: [], cycle: 0, status: 'idle', apiKey: '',
+  })
+  const [selectedItem, setSelectedItem] = useState<IntelItem | null>(null)
+  const [showSetup, setShowSetup] = useState(true)
+  const [showWebcams, setShowWebcams] = useState(false)
+  const [agentsRunning, setAgentsRunning] = useState(false)
   const managerRef = useRef<AgentManager | null>(null)
+  const { aircraft, fires } = useLiveData()
 
-  // Live data feeds
-  const liveData = useLiveData()
-
-  // SSE connection
-  const { connected: sseConnected } = useEventStream()
-
-  // Fetch RSS feeds immediately
-  useEffect(() => {
-    const fetchRSS = () => {
-      fetch('/api/rss?feeds=bbc_me,aljazeera,times_israel,iran_intl,reuters_world,al_monitor,war_zone,breaking_defense,sky_news,guardian_world,cnn_world&limit=60')
-        .then((r) => r.json())
-        .then((data) => {
-          setRssArticles(data.articles || [])
-          if (data.articles?.length > 0) {
-            setBreaking(data.articles.slice(0, 10).map((a: RSSArticle) => ({
-              text: a.title, severity: 3,
-              time: a.pubDate ? getTimeAgo(new Date(a.pubDate)) : '',
-            })))
-          }
-          setRssLoading(false)
-        })
-        .catch(() => setRssLoading(false))
+  const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {
+    const entry: LogEntry = {
+      time: new Date().toLocaleTimeString('ro-RO'),
+      message: msg, type,
     }
-    fetchRSS()
-    // Auto-refresh RSS every 2 minutes for more frequent updates
-    const interval = setInterval(fetchRSS, 120_000)
-    return () => clearInterval(interval)
+    setState(prev => ({
+      ...prev,
+      logs: [...prev.logs.slice(-80), entry],
+    }))
   }, [])
-
-  // Convert RSS to structured intel
-  const rssIntelItems = useMemo(
-    () => rssArticles.length > 0 ? extractIntelFromRSS(rssArticles) : [],
-    [rssArticles]
-  )
 
   const allItems = useMemo(() => {
-    const aiItems = Object.values(intel).flat()
-    const combined = [...aiItems, ...rssIntelItems, ...liveData.extractedIntel]
-    const seen = new Set<string>()
-    return combined
-      .filter(item => {
-        const key = item.headline.toLowerCase().slice(0, 60)
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
-      .sort((a, b) => (b.severity || 0) - (a.severity || 0))
-  }, [intel, rssIntelItems, liveData.extractedIntel])
+    return Object.values(state.intel).flat().sort((a, b) => (b.fetchedAt || 0) - (a.fetchedAt || 0))
+  }, [state.intel])
 
-  const totalItems = allItems.length + rssArticles.length
+  const criticalCount = useMemo(() => allItems.filter(i => i.severity >= 4).length, [allItems])
 
-  // Start agent manager
+  // Load API key from localStorage
   useEffect(() => {
-    const manager = new AgentManager(
-      'server-side',
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('intel_api_key') : null
+    if (saved) {
+      setState(prev => ({ ...prev, apiKey: saved }))
+      setShowSetup(false)
+    }
+  }, [])
+
+  const handleSetupConfirm = useCallback((key: string) => {
+    if (typeof window !== 'undefined') localStorage.setItem('intel_api_key', key)
+    setState(prev => ({ ...prev, apiKey: key }))
+    setShowSetup(false)
+  }, [])
+
+  const startAgents = useCallback((key: string) => {
+    if (managerRef.current) { managerRef.current.stop(); managerRef.current = null }
+    const mgr = new AgentManager(
+      key,
       (data) => {
-        setIntel(data.intel || {})
-        setAnalysis(data.analysis)
-        if (data.breaking?.length) setBreaking(data.breaking)
-        setCycle(data.cycle || 0)
-        setModelsUsed(data.modelsUsed || [])
+        setState(prev => ({
+          ...prev,
+          intel: data.intel,
+          analysis: data.analysis || prev.analysis,
+          breaking: data.breaking?.length ? data.breaking : prev.breaking,
+          cycle: data.cycle,
+          modelsUsed: data.modelsUsed || prev.modelsUsed,
+          status: 'done',
+        }))
       },
-      (progress: AgentProgress) => setAgentStatuses((prev) => ({ ...prev, [progress.agentId]: progress })),
-      () => {}
+      (progress: AgentProgress) => {
+        setState(prev => ({
+          ...prev,
+          agentStatus: { ...prev.agentStatus, [progress.agentId]: progress },
+        }))
+      },
+      (entry: LogEntry) => {
+        setState(prev => ({ ...prev, logs: [...prev.logs.slice(-80), entry] }))
+      }
     )
-    managerRef.current = manager
-    manager.start(REFRESH_INTERVAL)
-    return () => manager.stop()
+    managerRef.current = mgr
+    mgr.start(300)
+    setAgentsRunning(true)
+    setState(prev => ({ ...prev, status: 'running' }))
   }, [])
 
-  const handleVerify = useCallback(async (item: IntelItem) => {
-    const key = `${item.agentId}-${item.headline}`
-    setVerifications((prev) => ({ ...prev, [key]: { loading: true } }))
-    try {
-      const result = await verifyIntel('server-side', item)
-      setVerifications((prev) => ({ ...prev, [key]: result || { error: true } }))
-    } catch {
-      setVerifications((prev) => ({ ...prev, [key]: { error: true } }))
+  const stopAgents = useCallback(() => {
+    managerRef.current?.stop()
+    managerRef.current = null
+    setAgentsRunning(false)
+    setState(prev => ({ ...prev, status: 'idle' }))
+  }, [])
+
+  const handleToggleAgents = useCallback(() => {
+    if (agentsRunning) {
+      stopAgents()
+    } else {
+      startAgents(state.apiKey)
     }
-  }, [])
+  }, [agentsRunning, stopAgents, startAgents, state.apiKey])
 
-  const handleRefresh = useCallback(() => { managerRef.current?.manualRefresh() }, [])
-  const selectedKey = selectedEvent ? `${selectedEvent.agentId}-${selectedEvent.headline}` : null
-  const isScanning = Object.values(agentStatuses).some((s) => s?.status === 'running')
+  const handleRefresh = useCallback(() => {
+    if (managerRef.current) {
+      setState(prev => ({ ...prev, status: 'running' }))
+      managerRef.current.manualRefresh()
+    } else if (state.apiKey) {
+      startAgents(state.apiKey)
+    }
+  }, [state.apiKey, startAgents])
 
-  // Responsive
-  const [isMobile, setIsMobile] = useState(false)
+  // Auto-start after setup
   useEffect(() => {
-    const check = () => {
-      const mobile = window.innerWidth < 768
-      setIsMobile(mobile)
-      if (mobile) { setLeftOpen(false); setRightOpen(false) }
+    if (!showSetup && state.apiKey && !agentsRunning && !managerRef.current) {
+      startAgents(state.apiKey)
     }
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
+  }, [showSetup, state.apiKey])
 
-  const leftW = leftOpen ? (isMobile ? Math.min(window.innerWidth * 0.85, 400) : 400) : 0
-  const rightW = rightOpen ? (isMobile ? Math.min(window.innerWidth * 0.85, 320) : 320) : 0
+  // Cleanup
+  useEffect(() => () => { managerRef.current?.stop() }, [])
+
+  const selectedCoords = useMemo(() => {
+    if (!selectedItem) return null
+    // Try to extract coords from location string
+    return { lat: undefined, lng: undefined }
+  }, [selectedItem])
 
   return (
-    <div className="w-screen h-screen overflow-hidden relative" style={{ background: 'var(--bg-primary)' }}>
-      {/* Subtle scanline overlay */}
-      <div className="scanline-overlay" />
+    <>
+      {showSetup && <SetupModal onConfirm={handleSetupConfirm} />}
 
-      {/* Command bar */}
-      <CommandBar
-        status={isScanning ? 'running' : 'idle'}
-        cycle={cycle}
-        totalItems={totalItems}
-        modelsActive={modelsUsed.length || AI_MODELS.length}
+      <HeaderBar
+        status={state.status}
+        cycle={state.cycle}
+        totalItems={allItems.length}
+        modelsActive={state.modelsUsed.length || AI_MODELS.length}
         onRefresh={handleRefresh}
-        aircraftCount={liveData.aircraft.length}
-        fireCount={liveData.fires.length}
-        sseConnected={sseConnected}
+        onToggleAgents={handleToggleAgents}
+        agentsRunning={agentsRunning}
+        onOpenWebcams={() => setShowWebcams(true)}
       />
 
-      {/* 3D Globe — full background */}
-      <div className="absolute inset-0 z-[1]" style={{ top: 40, bottom: 26 }}>
-        <Globe3D
-          intelItems={allItems}
-          onSelectEvent={setSelectedEvent}
-          selectedEvent={selectedEvent}
-          aircraft={liveData.aircraft}
-          fires={liveData.fires}
+      {/* Main layout */}
+      <div style={{
+        position: 'fixed', inset: 0, top: 44, bottom: state.breaking.length ? 46 : 22,
+        display: 'flex', overflow: 'hidden',
+        background: 'radial-gradient(ellipse at 50% 50%, #060d1a 0%, #020509 100%)',
+      }}>
+        <ActiveNodesPanel
+          items={allItems}
+          onSelect={setSelectedItem}
+          selectedItem={selectedItem}
+        />
+
+        <GlobeSection
+          items={allItems}
+          selectedItem={selectedItem}
+          onSelectItem={setSelectedItem}
+          aircraft={aircraft}
+          fires={fires}
+        />
+
+        <TelemetryPanel
+          logs={state.logs}
+          items={allItems}
+          analysis={state.analysis}
+          modelsUsed={state.modelsUsed}
+          cycle={state.cycle}
+          status={state.status}
         />
       </div>
 
-      {/* ── Left Panel: Intel Feed ── */}
-      <div style={{
-        position: 'absolute', top: 40, left: 0, bottom: 26, zIndex: 100,
-        width: leftW, transition: 'width 0.3s cubic-bezier(0.16,1,0.3,1)',
-        overflow: 'hidden',
-      }}>
-        {/* Toggle button */}
-        <button onClick={() => setLeftOpen(!leftOpen)} style={{
-          position: 'absolute', top: 10, right: leftOpen ? -20 : -28,
-          width: 20, height: 40, zIndex: 10, background: 'rgba(5,10,18,0.92)',
-          border: '1px solid rgba(0,229,255,0.08)', borderRadius: '0 4px 4px 0',
-          color: 'var(--accent)', fontFamily: 'var(--mono)', fontSize: '0.55rem', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backdropFilter: 'blur(12px)',
-        }}>
-          {leftOpen ? '◀' : '▶'}
-        </button>
+      <BreakingTicker items={state.breaking} />
 
-        {leftOpen && (
-          <div style={{
-            width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
-            background: 'linear-gradient(90deg, rgba(5,10,18,0.94) 0%, rgba(5,10,18,0.90) 80%, rgba(5,10,18,0) 100%)',
-            backdropFilter: 'blur(20px)', borderRight: '1px solid rgba(0,229,255,0.04)',
-          }}>
-            {/* Panel header */}
-            <div style={{
-              padding: '8px 14px', borderBottom: '1px solid rgba(0,229,255,0.06)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
-              <span style={{ fontFamily: 'var(--display)', fontSize: '0.55rem', letterSpacing: 4, color: 'var(--accent)' }}>
-                LIVE INTEL FEED
-              </span>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: '0.42rem', color: 'var(--text-dim)', letterSpacing: 1 }}>
-                REAL-TIME
-              </span>
-            </div>
+      <StatusBar
+        totalItems={allItems.length}
+        critCount={criticalCount}
+        selectedCoords={selectedCoords}
+        agentsRunning={agentsRunning}
+      />
 
-            {/* Tabs */}
-            <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-              {[
-                { id: 'signals', label: 'SIGNALS', count: allItems.length },
-                { id: 'news', label: 'NEWS', count: rssArticles.length },
-                { id: 'analysis', label: 'ANALYSIS', count: undefined },
-              ].map((tab) => (
-                <button key={tab.id} onClick={() => setLeftTab(tab.id as typeof leftTab)} style={{
-                  flex: 1, padding: '7px 0', fontFamily: 'var(--mono)', fontSize: '0.48rem', fontWeight: 700, letterSpacing: 2,
-                  color: leftTab === tab.id ? 'var(--accent)' : 'var(--text-dim)',
-                  borderBottom: leftTab === tab.id ? '1px solid var(--accent)' : '1px solid transparent',
-                  cursor: 'pointer', transition: 'color 0.15s',
-                }}>
-                  {tab.label}
-                  {tab.count != null && (
-                    <span style={{ marginLeft: 4, fontSize: '0.42rem', opacity: 0.7 }}>{tab.count}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* Agent status */}
-            <AgentStatusGrid agentStatuses={agentStatuses} />
-
-            {/* Content area */}
-            <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-              {leftTab === 'signals' && (
-                <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
-                  {allItems.length === 0 && rssLoading && (
-                    <div style={{ padding: 30, textAlign: 'center' }}>
-                      <div className="spin-loading" style={{ margin: '0 auto 10px' }} />
-                      <div style={{ fontFamily: 'var(--mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: 2 }}>
-                        LOADING INTELLIGENCE...
-                      </div>
-                    </div>
-                  )}
-                  {allItems.length === 0 && !rssLoading && (
-                    <div style={{ padding: 30, textAlign: 'center' }}>
-                      <div style={{ fontFamily: 'var(--mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: 2 }}>
-                        NO SIGNALS DETECTED
-                      </div>
-                      <div style={{ fontFamily: 'var(--mono)', fontSize: '0.45rem', color: 'var(--text-dim)', marginTop: 4 }}>
-                        Switch to NEWS tab for all articles
-                      </div>
-                    </div>
-                  )}
-                  {allItems.map((item, i) => (
-                    <EventCard
-                      key={`${item.agentId}-${i}`}
-                      item={item}
-                      index={i}
-                      onClick={setSelectedEvent}
-                      isSelected={selectedEvent?.headline === item.headline && selectedEvent?.agentId === item.agentId}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {leftTab === 'news' && (
-                <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
-                  {rssLoading ? (
-                    <div style={{ padding: 30, textAlign: 'center' }}>
-                      <div className="spin-loading" style={{ margin: '0 auto 10px' }} />
-                      <div style={{ fontFamily: 'var(--mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: 2 }}>
-                        LOADING RSS...
-                      </div>
-                    </div>
-                  ) : rssArticles.map((article, i) => (
-                    <RSSCard key={i} article={article} index={i} />
-                  ))}
-                </div>
-              )}
-
-              {leftTab === 'analysis' && (
-                <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
-                  {analysis ? (
-                    <AnalysisPanel analysis={analysis} />
-                  ) : (
-                    <div style={{ padding: 30, textAlign: 'center', fontFamily: 'var(--mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: 2 }}>
-                      {allItems.length > 0 ? 'ANALYZING...' : 'WAITING FOR DATA...'}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── Right Panel: Telemetry + Webcams + Console ── */}
-      <div style={{
-        position: 'absolute', top: 40, right: 0, bottom: 26, zIndex: 100,
-        width: rightW, transition: 'width 0.3s cubic-bezier(0.16,1,0.3,1)',
-        overflow: 'hidden',
-      }}>
-        {/* Toggle button */}
-        <button onClick={() => setRightOpen(!rightOpen)} style={{
-          position: 'absolute', top: 10, left: rightOpen ? -20 : -28,
-          width: 20, height: 40, zIndex: 10, background: 'rgba(5,10,18,0.92)',
-          border: '1px solid rgba(0,229,255,0.08)', borderRadius: '4px 0 0 4px',
-          color: 'var(--accent)', fontFamily: 'var(--mono)', fontSize: '0.55rem', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backdropFilter: 'blur(12px)',
-        }}>
-          {rightOpen ? '▶' : '◀'}
-        </button>
-
-        {rightOpen && (
-          <div style={{
-            width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
-            background: 'linear-gradient(270deg, rgba(5,10,18,0.94) 0%, rgba(5,10,18,0.90) 80%, rgba(5,10,18,0) 100%)',
-            backdropFilter: 'blur(20px)', borderLeft: '1px solid rgba(0,229,255,0.04)',
-          }}>
-            {/* Panel header */}
-            <div style={{
-              padding: '8px 14px', borderBottom: '1px solid rgba(0,229,255,0.06)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
-              <span style={{ fontFamily: 'var(--display)', fontSize: '0.55rem', letterSpacing: 4, color: 'var(--accent)' }}>
-                MONITORING
-              </span>
-              <span style={{
-                fontFamily: 'var(--mono)', fontSize: '0.4rem', color: '#00E676', letterSpacing: 1,
-                display: 'flex', alignItems: 'center', gap: 4,
-              }}>
-                <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#00E676', animation: 'pulse 2s ease infinite' }} />
-                ONLINE
-              </span>
-            </div>
-
-            {/* Tabs */}
-            <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-              {[
-                { id: 'telemetry', label: 'TELEMETRY' },
-                { id: 'webcams', label: 'WEBCAMS' },
-                { id: 'console', label: 'CONSOLE' },
-              ].map((tab) => (
-                <button key={tab.id} onClick={() => setRightTab(tab.id as typeof rightTab)} style={{
-                  flex: 1, padding: '7px 0', fontFamily: 'var(--mono)', fontSize: '0.45rem', fontWeight: 700, letterSpacing: 2,
-                  color: rightTab === tab.id ? 'var(--accent)' : 'var(--text-dim)',
-                  borderBottom: rightTab === tab.id ? '1px solid var(--accent)' : '1px solid transparent',
-                  cursor: 'pointer', transition: 'color 0.15s',
-                }}>
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Content */}
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              {rightTab === 'telemetry' && (
-                <TelemetryPanel items={allItems} liveData={liveData} />
-              )}
-              {rightTab === 'webcams' && <WebcamsPanel />}
-              {rightTab === 'console' && (
-                <ConsoleLogs items={allItems} agentStatuses={agentStatuses} />
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Event detail modal */}
       <AnimatePresence>
-        {selectedEvent && (
-          <EventDetailModal
-            item={selectedEvent}
-            onClose={() => setSelectedEvent(null)}
-            onVerify={handleVerify}
-            verification={selectedKey ? verifications[selectedKey] : null}
-          />
+        {selectedItem && (
+          <EventDetailModal item={selectedItem} onClose={() => setSelectedItem(null)} />
         )}
       </AnimatePresence>
 
-      {/* Breaking ticker */}
-      <BreakingTicker items={breaking} />
-    </div>
+      <AnimatePresence>
+        {showWebcams && <WebcamModal onClose={() => setShowWebcams(false)} />}
+      </AnimatePresence>
+    </>
   )
 }
