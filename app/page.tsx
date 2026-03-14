@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { VerifiedEvent } from '@/lib/types'
 import LiveFeed from '@/components/LiveFeed'
 import EventDetail from '@/components/EventDetail'
+import ErrorBoundary from '@/components/ErrorBoundary'
 
 const Globe3D = dynamic(() => import('@/components/Globe3D'), {
   ssr: false,
@@ -125,11 +126,13 @@ export default function Page() {
       <div className="relative flex-1 flex overflow-hidden">
         {/* Globe — absolute background */}
         <div className="absolute inset-0 z-0 globe-bg">
+          <ErrorBoundary>
           <Globe3D
             events={events}
             selectedEvent={selected}
             onEventSelect={handleSelect}
           />
+          </ErrorBoundary>
         </div>
 
         {/* Left panel — Live Feed */}
