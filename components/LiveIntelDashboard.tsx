@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import dynamic from 'next/dynamic'
-import { WEBCAM_FEEDS, NEWS_STREAMS, SEVERITY_CONFIG } from '@/lib/config'
 import { AgentManager } from '@/lib/agents'
 import { useLiveData } from '@/lib/useLiveData'
 import type { IntelItem, AgentStatusMap, LogEntry } from '@/lib/types'
@@ -10,1118 +9,1162 @@ import type { IntelItem, AgentStatusMap, LogEntry } from '@/lib/types'
 const Globe3D = dynamic(() => import('./Globe3D'), {
   ssr: false,
   loading: () => (
-    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
+    <div className="w-full h-full flex items-center justify-center" style={{ background: '#020810' }}>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid rgba(0,242,255,0.12)', borderTopColor: '#00f2ff', animation: 'spin 0.9s linear infinite', margin: '0 auto 10px' }} />
-        <div style={{ fontFamily: 'Space Grotesk, monospace', fontSize: '0.5rem', color: '#00f2ff', letterSpacing: 5, textTransform: 'uppercase' }}>Loading Globe</div>
+        <div style={{
+          width: 36, height: 36, borderRadius: '50%',
+          border: '1.5px solid rgba(0,229,255,0.1)',
+          borderTopColor: '#00E5FF',
+          animation: 'spin 0.9s linear infinite',
+          margin: '0 auto 12px',
+        }} />
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.46rem', color: '#00E5FF', letterSpacing: 5 }}>
+          LOADING GLOBE
+        </div>
       </div>
     </div>
   ),
 })
 
-// ── Design tokens (matching the provided HTML reference exactly) ──
-const D = {
-  cyan:        '#00f2ff',
-  green:       '#00ff41',
-  red:         '#FF3040',
-  yellow:      '#eab308',
-  bg:          '#000000',
-  bgLight:     '#0a0a0a',
-  bgPanel:     'rgba(10, 10, 10, 0.85)',
-  bgCard:      'rgba(255, 255, 255, 0.02)',
-  bgCardHover: 'rgba(255, 255, 255, 0.035)',
-  border:      'rgba(255, 255, 255, 0.05)',
-  borderMed:   'rgba(255, 255, 255, 0.1)',
-  borderCyan:  'rgba(0, 242, 255, 0.2)',
-  borderCyanHover: 'rgba(0, 242, 255, 0.35)',
-  text:        '#f1f5f9',
-  textMuted:   '#94a3b8',
-  textDim:     '#64748b',
-  mono:        "'JetBrains Mono', monospace",
-  display:     "'Space Grotesk', sans-serif",
+// ─────────────────────────────────────────────────────────────────
+// DESIGN TOKENS
+// ─────────────────────────────────────────────────────────────────
+const C = {
+  bg:        '#010508',
+  panel:     'rgba(4,8,18,0.95)',
+  border:    'rgba(255,255,255,0.05)',
+  borderMed: 'rgba(255,255,255,0.09)',
+  borderCyan:'rgba(0,229,255,0.18)',
+  cyan:      '#00E5FF',
+  green:     '#00FF41',
+  red:       '#FF2040',
+  orange:    '#FF8C00',
+  yellow:    '#FFD700',
+  text:      '#e2e8f0',
+  muted:     '#64748b',
+  dim:       '#334155',
+  mono:      "'JetBrains Mono', monospace",
+  sans:      "'Space Grotesk', 'Inter', sans-serif",
 }
 
-// ── Status config ──
-const STATUS_CFG = {
-  STABLE:   { color: D.green,  bg: 'rgba(0,255,65,0.18)',    border: 'rgba(0,255,65,0.3)',    barColor: D.cyan,   textColor: D.cyan  },
-  WARNING:  { color: D.yellow, bg: 'rgba(234,179,8,0.18)',   border: 'rgba(234,179,8,0.3)',   barColor: D.yellow, textColor: '#fff'  },
-  CRITICAL: { color: '#ef4444',bg: 'rgba(239,68,68,0.18)',   border: 'rgba(239,68,68,0.3)',   barColor: '#ef4444',textColor: '#ef4444'},
+// ─────────────────────────────────────────────────────────────────
+// SEVERITY CONSTANTS
+// ─────────────────────────────────────────────────────────────────
+const SEV_COLOR: Record<number, string> = {
+  5: '#FF2040', 4: '#FF8C00', 3: '#FFD700', 2: '#00E676', 1: '#00B0FF',
+}
+const SEV_LABEL: Record<number, string> = {
+  5: 'CRITICAL', 4: 'HIGH', 3: 'MEDIUM', 2: 'LOW', 1: 'INFO',
+}
+const SEV_CLASS: Record<number, string> = {
+  5: 'event-card--critical', 4: 'event-card--high', 3: '', 2: '', 1: '',
 }
 
-// ── Node prefix mapping ──
-const NODE_PREFIX: Record<string, string> = {
-  sigint: 'SIGMA', osint: 'ALPHA', humint: 'KAPPA', geoint: 'OMEGA',
-  econint: 'DELTA', proxy: 'THETA', diplo: 'LAMBDA',
+// ─────────────────────────────────────────────────────────────────
+// CATEGORY ICONS
+// ─────────────────────────────────────────────────────────────────
+const CAT_ICON: Record<string, string> = {
+  military: '⚔', missile: '🚀', explosion: '💥', drone: '⬡',
+  airraid: '✈', cyber: '⬡', naval: '⚓', satellite: '◎',
+  political: '◆', nuclear: '☢', diplomatic: '◈', economic: '◉',
+  default: '◉',
 }
 
-// ── Location map ──
-const LOCATION_MAP: Record<string, [number, number]> = {
-  tehran: [35.69, 51.39], isfahan: [32.65, 51.67], bushehr: [28.98, 50.84],
-  jerusalem: [31.77, 35.21], 'tel aviv': [32.09, 34.78], gaza: [31.50, 34.47],
-  beirut: [33.89, 35.50], damascus: [33.51, 36.28], baghdad: [33.32, 44.37],
-  sanaa: [15.37, 44.19], hormuz: [26.57, 56.25], suez: [30.43, 32.34],
-  dubai: [25.20, 55.27], doha: [25.29, 51.53], riyadh: [24.71, 46.68],
-  moscow: [55.76, 37.62], kyiv: [50.45, 30.52], london: [51.51, -0.13],
-  paris: [48.86, 2.35], washington: [38.90, -77.04], beijing: [39.91, 116.39],
-  iran: [32.50, 53.70], israel: [31.50, 34.80], yemen: [16.00, 48.00],
-  ukraine: [48.38, 31.17], russia: [55.76, 37.62], china: [35.86, 104.20],
+// ─────────────────────────────────────────────────────────────────
+// WEBCAM / YOUTUBE STREAMS
+// ─────────────────────────────────────────────────────────────────
+const LIVE_STREAMS = [
+  { id: 'Xrge9NP_aMY', name: 'Al Jazeera English', region: 'GLOBAL', flag: '🌍' },
+  { id: 'h3MuIUNCCLI', name: 'DW News Live',        region: 'EU',     flag: '🇩🇪' },
+  { id: 'F5uM8jI2SLk', name: 'France 24 English',   region: 'EU',     flag: '🇫🇷' },
+  { id: '9Auq9mYxFEE', name: 'Sky News Live',        region: 'UK',     flag: '🇬🇧' },
+  { id: 'B-kxSbQFCvU', name: 'Euronews Live',        region: 'EU',     flag: '🇪🇺' },
+  { id: 'w_Ma8oQLmSM', name: 'BBC World News',       region: 'UK',     flag: '🇬🇧' },
+]
+
+// ─────────────────────────────────────────────────────────────────
+// AGENT DISPLAY CONFIG
+// ─────────────────────────────────────────────────────────────────
+const AGENT_DISPLAY: Record<string, { label: string; color: string; icon: string }> = {
+  sigint:  { label: 'SIGINT',  color: '#FF2040', icon: '◎' },
+  osint:   { label: 'OSINT',   color: '#00E5FF', icon: '◉' },
+  humint:  { label: 'HUMINT',  color: '#FF8C00', icon: '◈' },
+  geoint:  { label: 'GEOINT', color: '#A78BFA', icon: '◆' },
+  econint: { label: 'ECONINT', color: '#00FF41', icon: '◇' },
+  proxy:   { label: 'PROXY',   color: '#FB923C', icon: '⬡' },
+  diplo:   { label: 'DIPLO',   color: '#22D3EE', icon: '◈' },
 }
 
-function extractCoords(item: IntelItem): [number, number] | null {
-  const text = [item.location, item.headline, item.summary].filter(Boolean).join(' ').toLowerCase()
-  for (const [key, c] of Object.entries(LOCATION_MAP)) {
-    if (text.includes(key)) return c
-  }
-  return null
-}
-
-function zuluNow(d: Date) { return d.toISOString().slice(11, 19) }
-
-function nodeStatus(sev: number): 'STABLE' | 'WARNING' | 'CRITICAL' {
-  if (sev >= 4) return 'CRITICAL'
-  if (sev === 3) return 'WARNING'
-  return 'STABLE'
-}
-
-// ════════════════════════════════════════════════════════════
-// HEADER
-// ════════════════════════════════════════════════════════════
-function Header({ time, connected }: { time: Date; connected: boolean }) {
-  const [bars, setBars] = useState([true, true, true, false, false])
-
+// ─────────────────────────────────────────────────────────────────
+// SIMULATE TELEMETRY
+// ─────────────────────────────────────────────────────────────────
+function useTelemetry() {
+  const [tel, setTel] = useState({
+    latency:  23, packetLoss: 0.2, uplink: 98,
+    dataRate: 1.24, encrypt: 'AES-256', protocol: 'HTTP/3',
+    signalStrength: 4, jitter: 3,
+  })
   useEffect(() => {
-    const t = setInterval(() => {
-      const strength = 2 + Math.floor(Math.random() * 2)
-      setBars([true, true, strength >= 3, strength >= 4, strength >= 5])
-    }, 3500)
-    return () => clearInterval(t)
+    const id = setInterval(() => {
+      setTel(t => ({
+        ...t,
+        latency:     Math.max(8, Math.min(120, t.latency + (Math.random() - 0.45) * 6)),
+        packetLoss:  Math.max(0, Math.min(5, t.packetLoss + (Math.random() - 0.5) * 0.2)),
+        uplink:      Math.max(85, Math.min(100, t.uplink + (Math.random() - 0.5) * 1.5)),
+        jitter:      Math.max(1, Math.min(20, t.jitter + (Math.random() - 0.5) * 2)),
+        dataRate:    parseFloat((t.dataRate + (Math.random() - 0.5) * 0.15).toFixed(2)),
+        signalStrength: Math.min(5, Math.floor(t.uplink / 22)),
+      }))
+    }, 2200)
+    return () => clearInterval(id)
+  }, [])
+  return tel
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ZULU CLOCK
+// ─────────────────────────────────────────────────────────────────
+function useZuluClock() {
+  const [time, setTime] = useState('')
+  useEffect(() => {
+    const tick = () => {
+      const n = new Date()
+      setTime(
+        `${String(n.getUTCHours()).padStart(2,'0')}:${String(n.getUTCMinutes()).padStart(2,'0')}:${String(n.getUTCSeconds()).padStart(2,'0')}Z`
+      )
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [])
+  return time
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CONSOLE LOG HOOK
+// ─────────────────────────────────────────────────────────────────
+function useConsole(intelItems: IntelItem[]) {
+  const [logs, setLogs] = useState<LogEntry[]>([
+    { time: '00:00:00', message: 'INTEL LIVE v9.0 — SYSTEM BOOT', type: 'system' },
+    { time: '00:00:01', message: 'Initializing data pipeline...', type: 'info' },
+  ])
+  const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
+    const now = new Date()
+    const time = `${String(now.getUTCHours()).padStart(2,'0')}:${String(now.getUTCMinutes()).padStart(2,'0')}:${String(now.getUTCSeconds()).padStart(2,'0')}`
+    setLogs(prev => [...prev.slice(-80), { time, message, type }])
   }, [])
 
-  return (
-    <header style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 24px', height: 52, flexShrink: 0,
-      background: D.bgPanel, backdropFilter: 'blur(12px)',
-      borderBottom: `1px solid ${D.borderMed}`,
-      position: 'relative', zIndex: 50,
-    }}>
-      {/* Left: Logo + Divider + Status + Divider + Zulu */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 24 }}>
-          <span style={{
-            fontSize: 22, lineHeight: 1,
-            background: `linear-gradient(135deg, ${D.cyan}, #0d7ff2)`,
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          }}>◉</span>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontFamily: D.display, fontWeight: 700, fontSize: '1.05rem', color: '#fff', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              Intel-Live
-            </span>
-            <span style={{ fontFamily: D.mono, fontSize: '0.52rem', fontWeight: 300, color: 'rgba(0,242,255,0.45)', letterSpacing: '0.05em' }}>
-              v4.0.2
-            </span>
-          </div>
-        </div>
+  // Auto-generate system logs from intel
+  useEffect(() => {
+    if (intelItems.length === 0) return
+    const latest = intelItems[0]
+    if (latest) {
+      addLog(`[${(latest.agentId || 'OSINT').toUpperCase()}] New intel acquired: ${latest.location}`, 'info')
+      if (latest.severity >= 4) addLog(`ALERT: High-severity event — ${latest.headline.slice(0, 50)}`, 'error')
+    }
+  }, [intelItems.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
-        {/* Divider */}
-        <div style={{ width: 1, height: 16, background: D.borderMed, marginRight: 24 }} />
+  // Periodic system logs
+  useEffect(() => {
+    const msgs = [
+      ['SSE handshake maintained — 30s heartbeat', 'info'],
+      ['Scanning 27 RSS feeds...', 'info'],
+      ['GDELT database query complete', 'info'],
+      ['OpenSky aircraft tracking active', 'info'],
+      ['AI models: OpenRouter → Groq failover', 'system'],
+      ['Deduplication cache: 342 entries', 'system'],
+      ['WARN: Feed timeout — reuters.com', 'error'],
+      ['Retry in 30s — backoff applied', 'info'],
+      ['NASA FIRMS fire detection active', 'info'],
+      ['TLS 1.3 — connection secured', 'system'],
+    ] as const
+    let idx = 0
+    const id = setInterval(() => {
+      const [msg, type] = msgs[idx % msgs.length]
+      addLog(msg, type as LogEntry['type'])
+      idx++
+    }, 7000)
+    return () => clearInterval(id)
+  }, [addLog])
 
-        {/* System status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginRight: 24 }}>
-          <div style={{
-            width: 7, height: 7, borderRadius: '50%',
-            background: D.green, boxShadow: `0 0 8px ${D.green}`,
-            animation: 'pulse 2s ease infinite',
-          }} />
-          <span style={{ fontFamily: D.mono, fontSize: '0.58rem', color: D.textMuted, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-            System Status: <span style={{ color: D.green }}>Nominal</span>
-          </span>
-        </div>
-
-        {/* Divider */}
-        <div style={{ width: 1, height: 16, background: D.borderMed, marginRight: 24 }} />
-
-        {/* Zulu time */}
-        <div style={{ fontFamily: D.mono, fontSize: '0.58rem', color: D.textMuted, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-          Zulu Time: <span style={{ color: D.cyan, fontWeight: 600 }}>{zuluNow(time)}</span>
-        </div>
-      </div>
-
-      {/* Right: Signal + Button + Avatar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        {/* Uplink signal strength */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-          <span style={{ fontFamily: D.mono, fontSize: '0.44rem', color: D.textDim, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-            Uplink Signal Strength
-          </span>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2 }}>
-            {[8, 10, 12, 10, 10].map((h, i) => (
-              <div key={i} style={{
-                width: 4, height: h,
-                background: bars[i] ? D.cyan : `rgba(0,242,255,0.25)`,
-                transition: 'background 0.6s ease',
-              }} />
-            ))}
-          </div>
-        </div>
-
-        {/* Establish Uplink button */}
-        <button
-          style={{
-            fontFamily: D.display, fontSize: '0.58rem', fontWeight: 700,
-            letterSpacing: '0.18em', textTransform: 'uppercase',
-            color: D.cyan, padding: '7px 20px',
-            border: `1px solid ${D.cyan}`,
-            background: `rgba(0,242,255,0.08)`,
-            cursor: 'pointer', transition: 'all 0.2s',
-            borderRadius: 0,
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = D.cyan
-            e.currentTarget.style.color = '#000'
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = 'rgba(0,242,255,0.08)'
-            e.currentTarget.style.color = D.cyan
-          }}
-        >
-          Establish Uplink
-        </button>
-
-        {/* Avatar */}
-        <div style={{
-          width: 32, height: 32,
-          border: `1px solid rgba(255,255,255,0.2)`,
-          padding: 1, flexShrink: 0,
-        }}>
-          <div style={{
-            width: '100%', height: '100%',
-            background: connected
-              ? 'linear-gradient(135deg, #e2e8f0, #cbd5e1)'
-              : 'rgba(255,255,255,0.4)',
-          }} />
-        </div>
-      </div>
-    </header>
-  )
+  return { logs, addLog }
 }
 
-// ════════════════════════════════════════════════════════════
-// NODE CARD
-// ════════════════════════════════════════════════════════════
-function NodeCard({ item, index, onClick, selected }: {
-  item: IntelItem; index: number; onClick: () => void; selected: boolean
-}) {
-  const prefix = NODE_PREFIX[item.agentId] || 'NODE'
-  const name = `NODE::${prefix}-${String((index % 99) + 1).padStart(2, '0')}`
-  const status = nodeStatus(item.severity)
-  const s = STATUS_CFG[status]
-  const coords = extractCoords(item)
-  const barWidth = `${Math.min(98, 18 + item.severity * 16)}%`
+// ─────────────────────────────────────────────────────────────────
+// GLOBAL METRICS
+// ─────────────────────────────────────────────────────────────────
+function useGlobalMetrics(itemCount: number) {
+  const [metrics, setMetrics] = useState({ load: 42, dataRate: '1.24', defcon: 3, threats: 0 })
+  useEffect(() => {
+    setMetrics(m => ({
+      ...m,
+      load:    Math.min(95, 35 + Math.floor(itemCount / 3)),
+      threats: itemCount,
+    }))
+  }, [itemCount])
+  useEffect(() => {
+    const id = setInterval(() => {
+      setMetrics(m => ({
+        ...m,
+        load:     Math.max(20, Math.min(95, m.load + (Math.random() - 0.5) * 3)),
+        dataRate: (parseFloat(m.dataRate) + (Math.random() - 0.5) * 0.1).toFixed(2),
+      }))
+    }, 3000)
+    return () => clearInterval(id)
+  }, [])
+  return metrics
+}
 
-  const borderColor = selected
-    ? (status === 'STABLE' ? D.borderCyan : s.border)
-    : D.border
+// ─────────────────────────────────────────────────────────────────
+// EVENT CARD
+// ─────────────────────────────────────────────────────────────────
+function EventCard({ item, selected, onClick }: {
+  item: IntelItem; selected: boolean; onClick: () => void
+}) {
+  const color = SEV_COLOR[item.severity] || C.cyan
+  const agent = AGENT_DISPLAY[item.agentId] || { label: 'OSINT', color: C.cyan, icon: '◉' }
+  const catIcon = CAT_ICON[item.category?.toLowerCase()] || CAT_ICON.default
 
   return (
-    <div
+    <button
       onClick={onClick}
       style={{
+        width: '100%', textAlign: 'left',
         padding: '10px 14px',
-        border: `1px solid ${borderColor}`,
-        margin: '0 8px 4px',
-        background: selected ? `rgba(0,242,255,0.03)` : D.bgCard,
+        background: selected ? 'rgba(0,229,255,0.04)' : 'rgba(255,255,255,0.012)',
+        borderTop: '1px solid rgba(255,255,255,0.04)',
+        borderLeft: `2px solid ${color}`,
+        borderRight: 'none', borderBottom: 'none',
         cursor: 'pointer',
-        transition: 'border-color 0.2s, background 0.2s',
+        transition: 'background 0.15s ease',
+        display: 'block',
+        animation: 'fadeInUp 0.28s ease',
       }}
-      onMouseEnter={e => {
-        if (!selected) {
-          e.currentTarget.style.borderColor = D.borderCyanHover
-          e.currentTarget.style.background = D.bgCardHover
-        }
-      }}
-      onMouseLeave={e => {
-        if (!selected) {
-          e.currentTarget.style.borderColor = D.border
-          e.currentTarget.style.background = D.bgCard
-        }
-      }}
+      className={`hover:!bg-white/[0.022]`}
     >
-      {/* Name + Status badge */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 7 }}>
-        <span style={{
-          fontFamily: D.mono, fontSize: '0.62rem', fontWeight: 700,
-          color: s.textColor, letterSpacing: '0.05em',
-        }}>
-          {name}
-        </span>
-        <span style={{
-          fontFamily: D.mono, fontSize: '0.46rem', fontWeight: 700,
-          letterSpacing: '0.1em', textTransform: 'uppercase',
-          padding: '2px 5px',
-          color: s.color, background: s.bg, border: `1px solid ${s.border}`,
-        }}>
-          {status}
+      {/* Top row: severity badge + time */}
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1.5">
+          {/* Pulsing dot */}
+          <div style={{
+            width: 5, height: 5, borderRadius: '50%',
+            background: color, boxShadow: `0 0 6px ${color}`,
+            flexShrink: 0,
+            animation: item.severity >= 4 ? 'pulse 1.2s ease infinite' : 'none',
+          }} />
+          {/* Severity label */}
+          <span style={{
+            fontFamily: C.mono, fontSize: '0.44rem', fontWeight: 700,
+            color, letterSpacing: 2,
+          }}>
+            {SEV_LABEL[item.severity] || 'INFO'}
+          </span>
+          {/* Agent badge */}
+          <span style={{
+            fontFamily: C.mono, fontSize: '0.4rem', fontWeight: 600,
+            color: agent.color, opacity: 0.7, letterSpacing: 1,
+          }}>
+            [{agent.label}]
+          </span>
+        </div>
+        <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted }}>
+          {item.time}
         </span>
       </div>
 
-      {/* Coordinates */}
+      {/* Headline */}
       <div style={{
-        fontFamily: D.mono, fontSize: '0.52rem',
-        color: D.textMuted, marginBottom: 6,
-        letterSpacing: '0.03em',
+        fontFamily: C.sans, fontSize: '0.72rem', fontWeight: 500,
+        color: selected ? '#f1f5f9' : '#cbd5e1', lineHeight: 1.4,
+        marginBottom: 4,
       }}>
-        {coords
-          ? `LAT: ${coords[0].toFixed(4)} | LON: ${coords[1].toFixed(4)}`
-          : item.location ? item.location.slice(0, 30) : 'LAT: — | LON: —'}
+        {item.headline}
       </div>
 
-      {/* Progress bar */}
-      <div style={{ height: 3, background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
-        <div style={{
-          height: '100%', width: barWidth,
-          background: s.barColor,
-          transition: 'width 0.6s ease',
-          boxShadow: `0 0 6px ${s.barColor}55`,
-        }} />
+      {/* Location + source */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1" style={{ fontFamily: C.mono, fontSize: '0.42rem', color: C.muted }}>
+          <span style={{ color: C.cyan, opacity: 0.6 }}>◉</span>
+          <span>{item.location || 'LOCATION UNKNOWN'}</span>
+        </div>
+        <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.dim }}>
+          {item.source?.slice(0, 12)}
+        </span>
       </div>
-    </div>
+
+      {/* Category tag */}
+      {item.category && (
+        <div className="flex items-center gap-1 mt-1.5">
+          <span style={{ fontFamily: C.mono, fontSize: '0.4rem', color: C.muted }}>
+            {catIcon}
+          </span>
+          <span style={{
+            fontFamily: C.mono, fontSize: '0.38rem', color: C.dim,
+            background: 'rgba(255,255,255,0.04)', padding: '1px 5px',
+            letterSpacing: 1,
+          }}>
+            {item.category?.toUpperCase()}
+          </span>
+        </div>
+      )}
+    </button>
   )
 }
 
-// ════════════════════════════════════════════════════════════
-// LEFT PANEL
-// ════════════════════════════════════════════════════════════
-function LeftPanel({ items, selected, onSelect }: {
-  items: IntelItem[]
-  selected: IntelItem | null
-  onSelect: (item: IntelItem) => void
-}) {
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const [page, setPage] = useState(1)
-  const PAGE_SIZE = 20
-  const criticalCount = items.filter(i => i.severity >= 4).length
+// ─────────────────────────────────────────────────────────────────
+// YOUTUBE EMBED
+// ─────────────────────────────────────────────────────────────────
+function YouTubePlayer({ videoId, label }: { videoId: string; label: string }) {
+  const [status, setStatus] = useState<'loading' | 'live' | 'error'>('loading')
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>()
 
   useEffect(() => {
-    if (!bottomRef.current) return
-    const observer = new IntersectionObserver(
-      entries => { if (entries[0].isIntersecting) setPage(p => p + 1) },
-      { threshold: 0.1 }
-    )
-    observer.observe(bottomRef.current)
-    return () => observer.disconnect()
+    setStatus('loading')
+    // Give stream 8s to load, then declare error
+    timeoutRef.current = setTimeout(() => {
+      if (status === 'loading') setStatus('error')
+    }, 8000)
+    return () => clearTimeout(timeoutRef.current)
+  }, [videoId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleLoad = useCallback(() => {
+    clearTimeout(timeoutRef.current)
+    setStatus('live')
   }, [])
 
-  const visible = items.slice(0, page * PAGE_SIZE)
+  const handleError = useCallback(() => {
+    clearTimeout(timeoutRef.current)
+    setStatus('error')
+  }, [])
 
   return (
-    <aside style={{
-      width: 296, flexShrink: 0, display: 'flex', flexDirection: 'column',
-      background: D.bgPanel, backdropFilter: 'blur(12px)',
-      borderRight: `1px solid rgba(255,255,255,0.05)`,
-      zIndex: 40,
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '12px 14px 10px',
-        borderBottom: `1px solid ${D.borderMed}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexShrink: 0,
-      }}>
-        <span style={{
-          fontFamily: D.display, fontSize: '0.62rem', fontWeight: 700,
-          color: D.textMuted, letterSpacing: '0.2em', textTransform: 'uppercase',
-        }}>
-          Active Nodes
-        </span>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ opacity: 0.4 }}>
-          <rect x="1" y="3.5" width="12" height="1.2" rx="0.6" fill="white" />
-          <rect x="3.5" y="6.5" width="7" height="1.2" rx="0.6" fill="white" />
-          <rect x="6" y="9.5" width="2" height="1.2" rx="0.6" fill="white" />
-        </svg>
-      </div>
-
-      {/* Scrollable node list */}
-      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingTop: 6, paddingBottom: 4 }}>
-        {visible.length === 0 ? (
-          <div style={{ padding: '16px 14px' }}>
-            {[...Array(5)].map((_, i) => (
-              <div key={i} style={{
-                margin: '0 0 4px',
-                border: `1px solid ${D.border}`, padding: '10px 12px',
-                background: D.bgCard,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <div style={{ height: 8, background: 'rgba(0,242,255,0.06)', borderRadius: 1, width: '55%' }} />
-                  <div style={{ height: 8, background: 'rgba(255,255,255,0.04)', borderRadius: 1, width: '22%' }} />
-                </div>
-                <div style={{ height: 6, background: 'rgba(255,255,255,0.03)', borderRadius: 1, marginBottom: 7, width: '70%' }} />
-                <div style={{ height: 3, background: 'rgba(255,255,255,0.04)' }} />
-              </div>
-            ))}
-            <div style={{
-              textAlign: 'center', marginTop: 12,
-              fontFamily: D.mono, fontSize: '0.44rem',
-              color: 'rgba(0,242,255,0.3)', letterSpacing: '0.2em',
-              textTransform: 'uppercase', animation: 'pulse 1.5s ease infinite',
-            }}>
-              Scanning agents...
-            </div>
-          </div>
-        ) : (
-          <>
-            {visible.map((item, i) => (
-              <NodeCard
-                key={`${item.fetchedAt}-${i}`}
-                item={item}
-                index={i}
-                onClick={() => onSelect(item)}
-                selected={selected === item}
-              />
-            ))}
-            <div ref={bottomRef} style={{ padding: '10px', textAlign: 'center' }}>
-              {visible.length < items.length && (
-                <div style={{
-                  fontFamily: D.mono, fontSize: '0.42rem',
-                  color: 'rgba(0,242,255,0.3)', letterSpacing: '0.15em',
-                  textTransform: 'uppercase',
-                }}>
-                  Loading more...
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Node stats footer */}
-      <div style={{
-        padding: '10px 14px 8px',
-        background: 'rgba(255,255,255,0.015)',
-        borderTop: `1px solid ${D.borderMed}`,
-        flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-          <span style={{ fontFamily: D.mono, fontSize: '0.5rem', color: D.textDim, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Total Nodes
-          </span>
-          <span style={{ fontFamily: D.mono, fontSize: '0.55rem', color: '#fff', fontWeight: 600 }}>
-            {(Math.max(items.length, 12) * 7 + 845).toLocaleString()}
-          </span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ fontFamily: D.mono, fontSize: '0.5rem', color: D.textDim, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Active Uplinks
-          </span>
-          <span style={{ fontFamily: D.mono, fontSize: '0.55rem', color: D.cyan, fontWeight: 600 }}>
-            {(94 + (items.length % 5)).toFixed(1)}%
-          </span>
-        </div>
-      </div>
-    </aside>
-  )
-}
-
-// ════════════════════════════════════════════════════════════
-// CENTER PANEL
-// ════════════════════════════════════════════════════════════
-function CenterPanel({ items, selected, onSelect, aircraft, fires }: {
-  items: IntelItem[]
-  selected: IntelItem | null
-  onSelect: (item: IntelItem | null) => void
-  aircraft: any[]
-  fires: any[]
-}) {
-  const defcon = items.length > 20 ? 3 : items.length > 8 ? 4 : 5
-  const defconColor = defcon <= 3 ? D.red : defcon === 4 ? D.yellow : D.green
-  const globalLoad = Math.min(98, Math.round(items.length * 1.8 + 22))
-  const dataRate = (items.length * 0.04 + 0.8).toFixed(1)
-
-  return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden', background: '#000' }}>
-      {/* Globe area */}
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        <Globe3D
-          intelItems={items}
-          onSelectEvent={onSelect}
-          selectedEvent={selected}
-          aircraft={aircraft}
-          fires={fires}
-        />
-
-        {/* HUD top-left overlay */}
-        <div style={{ position: 'absolute', top: 16, left: 16, pointerEvents: 'none', zIndex: 5 }}>
-          <div style={{
-            fontFamily: D.mono, fontSize: '0.58rem', color: D.cyan,
-            letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: 5,
-          }}>
-            Visualizing::Live_Orbits
-          </div>
-          <div style={{ width: 130, height: 1, background: `linear-gradient(90deg, ${D.cyan}, transparent)` }} />
-        </div>
-
-        {/* Zoom controls — floating right */}
-        <div style={{
-          position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
-          display: 'flex', flexDirection: 'column', gap: 3, zIndex: 10,
-        }}>
-          {[
-            { label: '+', title: 'Zoom In' },
-            { label: '−', title: 'Zoom Out' },
-          ].map(({ label, title }) => (
-            <button key={label} title={title} style={{
-              width: 36, height: 36,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: D.bgPanel, backdropFilter: 'blur(12px)',
-              border: `1px solid ${D.borderMed}`,
-              color: 'rgba(0,242,255,0.65)', fontSize: '1.1rem', fontFamily: D.mono,
-              cursor: 'pointer', transition: 'all 0.15s',
-            }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,242,255,0.12)'; e.currentTarget.style.color = D.cyan }}
-              onMouseLeave={e => { e.currentTarget.style.background = D.bgPanel; e.currentTarget.style.color = 'rgba(0,242,255,0.65)' }}
-            >
-              {label}
-            </button>
-          ))}
-          <button title="Reset view" onClick={() => onSelect(null)} style={{
-            width: 36, height: 36, marginTop: 14,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: D.bgPanel, backdropFilter: 'blur(12px)',
-            border: `1px solid ${D.borderCyan}`,
-            color: D.cyan, fontSize: '0.8rem', fontFamily: D.mono,
-            cursor: 'pointer', transition: 'all 0.15s',
+    <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', overflow: 'hidden' }}>
+      {status !== 'error' && (
+        <iframe
+          ref={iframeRef}
+          src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&playsinline=1&rel=0&iv_load_policy=3&modestbranding=1`}
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowFullScreen
+          onLoad={handleLoad}
+          onError={handleError}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            border: 'none', display: 'block',
+            opacity: status === 'live' ? 1 : 0,
+            transition: 'opacity 0.4s ease',
           }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,242,255,0.12)' }}
-            onMouseLeave={e => { e.currentTarget.style.background = D.bgPanel }}
+          title={label}
+        />
+      )}
+
+      {/* Loading state */}
+      {status === 'loading' && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(2,6,14,0.95)',
+        }}>
+          <div style={{
+            width: 24, height: 24, borderRadius: '50%',
+            border: '1.5px solid rgba(0,229,255,0.12)',
+            borderTopColor: C.cyan,
+            animation: 'spin 0.9s linear infinite',
+            marginBottom: 8,
+          }} />
+          <span style={{ fontFamily: C.mono, fontSize: '0.4rem', color: 'rgba(0,229,255,0.5)', letterSpacing: 3 }}>
+            CONNECTING...
+          </span>
+        </div>
+      )}
+
+      {/* Error / No Signal state */}
+      {status === 'error' && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          background: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.9) 0px, rgba(0,0,0,0.9) 2px, rgba(4,8,18,0.95) 2px, rgba(4,8,18,0.95) 4px)',
+        }}>
+          <div style={{
+            fontFamily: C.mono, fontSize: '0.62rem', color: C.muted,
+            letterSpacing: 5, marginBottom: 6,
+          }}>
+            NO SIGNAL
+          </div>
+          <div style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.dim, letterSpacing: 3, marginBottom: 12 }}>
+            ENCRYPTED FEED
+          </div>
+          <button
+            onClick={() => setStatus('loading')}
+            style={{
+              fontFamily: C.mono, fontSize: '0.38rem', color: C.cyan,
+              border: `1px solid ${C.borderCyan}`, padding: '3px 10px',
+              background: 'transparent', cursor: 'pointer', letterSpacing: 2,
+            }}
           >
-            ⊙
+            RETRY
           </button>
         </div>
+      )}
 
-        {/* Selected event popup */}
-        {selected && (
-          <div style={{
-            position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
-            background: 'rgba(5,5,5,0.96)', backdropFilter: 'blur(20px)',
-            border: `1px solid ${SEVERITY_CONFIG[selected.severity as keyof typeof SEVERITY_CONFIG]?.color || D.cyan}44`,
-            padding: '12px 16px', maxWidth: 440, zIndex: 20, minWidth: 300,
-            animation: 'fadeInUp 0.2s ease',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-              <span style={{ fontFamily: D.mono, fontSize: '0.44rem', color: D.cyan, letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-                [{(selected.agentId || 'OSINT').toUpperCase()}]
-              </span>
-              <span style={{
-                fontFamily: D.mono, fontSize: '0.42rem', fontWeight: 700,
-                color: SEVERITY_CONFIG[selected.severity as keyof typeof SEVERITY_CONFIG]?.color || '#fff',
-                padding: '1px 5px',
-                background: SEVERITY_CONFIG[selected.severity as keyof typeof SEVERITY_CONFIG]?.bg || 'transparent',
-              }}>
-                {SEVERITY_CONFIG[selected.severity as keyof typeof SEVERITY_CONFIG]?.label || 'MEDIUM'}
-              </span>
-              <span style={{ marginLeft: 'auto', fontFamily: D.mono, fontSize: '0.4rem', color: 'rgba(0,242,255,0.45)' }}>
-                {selected.time}
-              </span>
-            </div>
-            <div style={{ fontFamily: D.display, fontSize: '0.74rem', fontWeight: 600, color: '#f1f5f9', lineHeight: 1.3, marginBottom: 6 }}>
-              {selected.headline}
-            </div>
-            {selected.summary && (
-              <div style={{ fontFamily: D.display, fontSize: '0.6rem', color: 'rgba(241,245,249,0.45)', lineHeight: 1.45, marginBottom: 5 }}>
-                {selected.summary.slice(0, 200)}{selected.summary.length > 200 ? '…' : ''}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 10 }}>
-              {selected.source && <span style={{ fontFamily: D.mono, fontSize: '0.4rem', color: 'rgba(255,255,255,0.28)' }}>{selected.source}</span>}
-              {selected.location && <span style={{ fontFamily: D.mono, fontSize: '0.4rem', color: 'rgba(255,255,255,0.22)' }}>📍 {selected.location}</span>}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Bottom stats bar */}
-      <div style={{
-        display: 'flex', flexShrink: 0,
-        background: D.bgPanel, backdropFilter: 'blur(12px)',
-        borderTop: `1px solid ${D.borderMed}`,
-      }}>
-        {[
-          { label: 'Global Load',  value: `${globalLoad}`, suffix: '%',      color: '#fff'  },
-          { label: 'Data Rate',    value: `${dataRate}`,   suffix: 'TB/s',   color: '#fff'  },
-          { label: 'Security',     value: `DEFCON-${defcon}`, suffix: '',    color: defconColor },
-        ].map((stat, i) => (
-          <div key={i} style={{
-            flex: 1, padding: '10px 16px',
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-            borderRight: i < 2 ? `1px solid ${D.borderMed}` : 'none',
-          }}>
-            <span style={{
-              fontFamily: D.mono, fontSize: '0.42rem',
-              color: D.textDim, textTransform: 'uppercase',
-              letterSpacing: '0.2em', marginBottom: 3,
-            }}>
-              {stat.label}
-            </span>
-            <span style={{ fontFamily: D.mono, fontSize: '1.05rem', fontWeight: 700, color: stat.color }}>
-              {stat.value}<span style={{ color: D.cyan }}>{stat.suffix}</span>
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ════════════════════════════════════════════════════════════
-// TELEMETRY CHART
-// ════════════════════════════════════════════════════════════
-function TelemetryChart() {
-  const [bars, setBars] = useState(() => Array.from({ length: 8 }, () => 20 + Math.random() * 70))
-  useEffect(() => {
-    const t = setInterval(() => {
-      setBars(prev => prev.map(v => Math.max(12, Math.min(98, v + (Math.random() - 0.5) * 22))))
-    }, 1800)
-    return () => clearInterval(t)
-  }, [])
-
-  return (
-    <div style={{ position: 'relative', height: 88, display: 'flex', alignItems: 'flex-end', gap: 3 }}>
-      {/* Grid lines */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-        {[0.33, 0.66, 1].map((pos, i) => (
-          <div key={i} style={{
-            position: 'absolute', bottom: `${pos * 100}%`,
-            left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.05)',
-          }} />
-        ))}
-      </div>
-      {bars.map((h, i) => (
-        <div key={i} style={{
-          flex: 1,
-          background: `rgba(0,242,255,0.18)`,
-          borderTop: `1px solid rgba(0,242,255,0.5)`,
-          height: `${h}%`,
-          transition: 'height 0.8s cubic-bezier(0.4,0,0.2,1)',
-        }} />
-      ))}
-    </div>
-  )
-}
-
-// ════════════════════════════════════════════════════════════
-// WEBCAM VIEWER
-// ════════════════════════════════════════════════════════════
-function WebcamViewer({ feeds, activeIndex, onNext, onPrev }: {
-  feeds: typeof WEBCAM_FEEDS
-  activeIndex: number
-  onNext: () => void
-  onPrev: () => void
-}) {
-  const [iframeKey, setIframeKey] = useState(0)
-  const feed = feeds[activeIndex]
-
-  useEffect(() => {
-    // Small delay before loading iframe so prev stream teardown completes
-    const t = setTimeout(() => setIframeKey(k => k + 1), 300)
-    return () => clearTimeout(t)
-  }, [activeIndex])
-
-  return (
-    <div>
-      {/* Title bar */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '4px 8px',
-        background: 'rgba(0,0,0,0.5)',
-        borderBottom: `1px solid ${D.border}`,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <div style={{ width: 5, height: 5, borderRadius: '50%', background: D.red, animation: 'pulse 1s ease infinite', boxShadow: `0 0 5px ${D.red}` }} />
-          <span style={{ fontFamily: D.mono, fontSize: '0.44rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-            {feed.flag} {feed.name}
-          </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <button onClick={onPrev} style={{ fontFamily: D.mono, fontSize: '0.5rem', color: D.cyan, cursor: 'pointer', padding: '1px 7px', border: `1px solid ${D.borderCyan}`, background: 'transparent' }}>‹</button>
-          <span style={{ fontFamily: D.mono, fontSize: '0.42rem', color: D.textDim }}>{activeIndex + 1}/{feeds.length}</span>
-          <button onClick={onNext} style={{ fontFamily: D.mono, fontSize: '0.5rem', color: D.cyan, cursor: 'pointer', padding: '1px 7px', border: `1px solid ${D.borderCyan}`, background: 'transparent' }}>›</button>
-        </div>
-      </div>
-
-      {/* Video container */}
-      <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, background: '#000', overflow: 'hidden' }}>
-        <iframe
-          key={iframeKey}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
-          src={`https://www.youtube-nocookie.com/embed/${feed.id}?autoplay=1&mute=1&controls=1&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1`}
-          allow="autoplay; encrypted-media; picture-in-picture; web-share"
-          allowFullScreen
-          title={feed.name}
-          loading="lazy"
-        />
-        {/* Scan lines overlay for aesthetic */}
+      {/* Live badge */}
+      {status === 'live' && (
         <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 6px)',
-          zIndex: 1,
+          position: 'absolute', top: 6, left: 6,
+          display: 'flex', alignItems: 'center', gap: 4,
+          background: 'rgba(0,0,0,0.7)', padding: '2px 6px',
+          border: '1px solid rgba(255,32,64,0.4)',
+        }}>
+          <div style={{
+            width: 5, height: 5, borderRadius: '50%', background: C.red,
+            animation: 'pulse 1.5s ease infinite',
+          }} />
+          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.red, letterSpacing: 2 }}>LIVE</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TELEMETRY WIDGET
+// ─────────────────────────────────────────────────────────────────
+function MetricBar({ label, value, max, color, unit }: {
+  label: string; value: number; max: number; color: string; unit?: string
+}) {
+  const pct = Math.min(100, (value / max) * 100)
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div className="flex justify-between items-center mb-1">
+        <span style={{ fontFamily: C.mono, fontSize: '0.42rem', color: C.muted, letterSpacing: 2 }}>{label}</span>
+        <span style={{ fontFamily: C.mono, fontSize: '0.46rem', color, fontWeight: 700 }}>
+          {typeof value === 'number' ? value.toFixed(value < 10 ? 1 : 0) : value}{unit}
+        </span>
+      </div>
+      <div style={{ height: 2, background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+        <div style={{
+          height: '100%', width: `${pct}%`,
+          background: `linear-gradient(90deg, ${color}99, ${color})`,
+          transition: 'width 0.8s ease',
+          boxShadow: `0 0 8px ${color}66`,
         }} />
       </div>
     </div>
   )
 }
 
-// ════════════════════════════════════════════════════════════
-// CONSOLE LOGS
-// ════════════════════════════════════════════════════════════
-function ConsoleLogs({ logs }: { logs: LogEntry[] }) {
-  const logsEndRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [logs])
-
-  const TYPE_COLOR = { info: D.cyan, success: D.green, error: D.red, system: 'rgba(0,242,255,0.5)' }
-  const TYPE_LABEL = { info: 'INFO', success: 'INFO', error: 'ERR ', system: 'SYS ' }
-
+// ─────────────────────────────────────────────────────────────────
+// SIGNAL BARS
+// ─────────────────────────────────────────────────────────────────
+function SignalBars({ strength }: { strength: number }) {
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', fontFamily: D.mono }}>
-      {logs.map((log, i) => (
-        <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 3, animation: 'fadeIn 0.15s ease' }}>
-          <span style={{ fontSize: '0.44rem', color: 'rgba(148,163,184,0.35)', flexShrink: 0, lineHeight: 1.8 }}>
-            [{log.time}]
-          </span>
-          <span style={{ fontSize: '0.48rem', color: TYPE_COLOR[log.type], flexShrink: 0, fontWeight: 700, lineHeight: 1.8 }}>
-            {TYPE_LABEL[log.type]}:
-          </span>
-          <span style={{ fontSize: '0.48rem', color: 'rgba(241,245,249,0.55)', lineHeight: 1.55 }}>
-            {log.message}
-          </span>
-        </div>
+    <div className="flex items-end gap-0.5" style={{ height: 14 }}>
+      {[1,2,3,4,5].map(i => (
+        <div key={i} style={{
+          width: 3,
+          height: `${i * 18}%`,
+          background: i <= strength ? C.green : 'rgba(255,255,255,0.12)',
+          boxShadow: i <= strength ? `0 0 4px ${C.green}` : 'none',
+          transition: 'background 0.3s ease',
+        }} />
       ))}
-      <div ref={logsEndRef} />
     </div>
   )
 }
 
-// ════════════════════════════════════════════════════════════
-// RIGHT PANEL
-// ════════════════════════════════════════════════════════════
-function RightPanel({ logs, items }: {
-  logs: LogEntry[]
+// ─────────────────────────────────────────────────────────────────
+// BREAKING TICKER
+// ─────────────────────────────────────────────────────────────────
+function BreakingTicker({ items }: { items: IntelItem[] }) {
+  const critical = items.filter(i => i.severity >= 4).slice(0, 8)
+  if (critical.length === 0) return null
+
+  const text = critical.map(i => `⬥ ${i.headline}   `).join('   ') + '   '
+
+  return (
+    <div style={{
+      background: 'rgba(255,32,64,0.08)',
+      borderTop: `1px solid rgba(255,32,64,0.25)`,
+      borderBottom: `1px solid rgba(255,32,64,0.15)`,
+      overflow: 'hidden', whiteSpace: 'nowrap',
+      height: 22, display: 'flex', alignItems: 'center',
+    }}>
+      <div style={{
+        fontFamily: C.mono, fontSize: '0.42rem', color: '#ff6080',
+        fontWeight: 700, padding: '0 10px', flexShrink: 0,
+        borderRight: '1px solid rgba(255,32,64,0.25)',
+        letterSpacing: 2,
+      }}>
+        BREAKING
+      </div>
+      <div style={{ overflow: 'hidden', flex: 1 }}>
+        <div style={{
+          display: 'inline-block',
+          fontFamily: C.mono, fontSize: '0.42rem', color: '#e2e8f0', letterSpacing: 0.5,
+          animation: 'tickerScroll 40s linear infinite',
+          whiteSpace: 'nowrap',
+        }}>
+          {text}{text}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// LEFT PANEL — INFINITE SCROLL EVENT FEED
+// ─────────────────────────────────────────────────────────────────
+function LeftPanel({
+  items, selectedEvent, onSelect,
+  agentStatus, loadingMore, sentinelRef,
+}: {
   items: IntelItem[]
+  selectedEvent: IntelItem | null
+  onSelect: (i: IntelItem) => void
+  agentStatus: AgentStatusMap
+  loadingMore: boolean
+  sentinelRef: React.RefObject<HTMLDivElement>
 }) {
-  const [bottomTab, setBottomTab] = useState<'console' | 'cams'>('console')
-  const [camIndex, setCamIndex] = useState(0)
-  const [pktLoss, setPktLoss] = useState('0.0001')
-  const [latency, setLatency] = useState(14)
-  const [cmd, setCmd] = useState('')
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      setPktLoss((Math.random() * 0.0008 + 0.00005).toFixed(5))
-      setLatency(Math.round(9 + Math.random() * 18))
-    }, 2500)
-    return () => clearInterval(t)
-  }, [])
-
-  const nextCam = useCallback(() => setCamIndex(i => (i + 1) % WEBCAM_FEEDS.length), [])
-  const prevCam = useCallback(() => setCamIndex(i => (i - 1 + WEBCAM_FEEDS.length) % WEBCAM_FEEDS.length), [])
-
-  const coordItem = items[0]
-  const coords = coordItem ? extractCoords(coordItem) : null
+  const critCount   = items.filter(i => i.severity >= 5).length
+  const highCount   = items.filter(i => i.severity === 4).length
 
   return (
     <aside style={{
-      width: 375, flexShrink: 0, display: 'flex', flexDirection: 'column',
-      background: D.bgPanel, backdropFilter: 'blur(12px)',
-      borderLeft: `1px solid rgba(255,255,255,0.05)`,
-      zIndex: 40,
+      width: 280, minWidth: 256, maxWidth: 320,
+      height: '100%', display: 'flex', flexDirection: 'column',
+      background: C.panel,
+      borderRight: `1px solid ${C.border}`,
+      flexShrink: 0,
     }}>
-
-      {/* ── TOP HALF: LIVE TELEMETRY ── */}
+      {/* Panel header */}
       <div style={{
-        height: '50%', display: 'flex', flexDirection: 'column',
-        borderBottom: `1px solid ${D.borderMed}`,
+        padding: '10px 14px 8px',
+        borderBottom: `1px solid ${C.border}`,
+        flexShrink: 0,
       }}>
-        {/* Telemetry header */}
-        <div style={{
-          padding: '10px 16px',
-          borderBottom: `1px solid ${D.borderMed}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          flexShrink: 0,
-        }}>
-          <span style={{
-            fontFamily: D.display, fontSize: '0.62rem', fontWeight: 700,
-            color: D.textMuted, letterSpacing: '0.2em', textTransform: 'uppercase',
-          }}>
-            Live Telemetry
-          </span>
-          <span style={{
-            fontFamily: D.mono, fontSize: '0.44rem', color: D.cyan,
-            letterSpacing: '0.15em', textTransform: 'uppercase',
-            padding: '2px 7px', border: `1px solid ${D.borderCyan}`,
-          }}>
-            Real-Time
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, boxShadow: `0 0 8px ${C.green}`, animation: 'pulse 2s ease infinite' }} />
+            <span style={{ fontFamily: C.mono, fontSize: '0.5rem', color: C.text, letterSpacing: 3, fontWeight: 700 }}>
+              INCIDENT FEED
+            </span>
+          </div>
+          <span style={{ fontFamily: C.mono, fontSize: '0.4rem', color: C.muted, letterSpacing: 1 }}>
+            LIVE
           </span>
         </div>
 
-        {/* Chart + metrics */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 8px' }}>
-          {/* Bar chart */}
-          <TelemetryChart />
-
-          {/* 2×2 metric grid */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 1fr',
-            gap: 0, marginTop: 10,
-            border: `1px solid ${D.border}`,
-            overflow: 'hidden',
-          }}>
-            {[
-              { label: 'Packet Loss', value: `${pktLoss}%`,  color: '#f1f5f9' },
-              { label: 'Latency',     value: `${latency}ms`, color: '#f1f5f9' },
-              { label: 'Encryption',  value: 'AES-256',      color: D.green   },
-              { label: 'Protocol',    value: 'HTTP/3',       color: '#f1f5f9' },
-            ].map((m, i) => (
-              <div key={i} style={{
-                padding: '8px 12px',
-                background: D.bgCard,
-                borderRight: i % 2 === 0 ? `1px solid ${D.border}` : 'none',
-                borderBottom: i < 2 ? `1px solid ${D.border}` : 'none',
-              }}>
-                <div style={{
-                  fontFamily: D.mono, fontSize: '0.42rem',
-                  color: D.textDim, textTransform: 'uppercase',
-                  letterSpacing: '0.12em', marginBottom: 4,
-                }}>
-                  {m.label}
-                </div>
-                <div style={{ fontFamily: D.mono, fontSize: '1rem', fontWeight: 700, color: m.color }}>
-                  {m.value}
-                </div>
-              </div>
-            ))}
+        {/* Event counts */}
+        <div className="flex gap-3">
+          <div className="flex items-center gap-1">
+            <span style={{ fontFamily: C.mono, fontSize: '0.5rem', color: C.red, fontWeight: 700 }}>{critCount}</span>
+            <span style={{ fontFamily: C.mono, fontSize: '0.36rem', color: C.muted, letterSpacing: 1 }}>CRITICAL</span>
           </div>
+          <div className="flex items-center gap-1">
+            <span style={{ fontFamily: C.mono, fontSize: '0.5rem', color: C.orange, fontWeight: 700 }}>{highCount}</span>
+            <span style={{ fontFamily: C.mono, fontSize: '0.36rem', color: C.muted, letterSpacing: 1 }}>HIGH</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span style={{ fontFamily: C.mono, fontSize: '0.5rem', color: C.cyan, fontWeight: 700 }}>{items.length}</span>
+            <span style={{ fontFamily: C.mono, fontSize: '0.36rem', color: C.muted, letterSpacing: 1 }}>TOTAL</span>
+          </div>
+        </div>
+
+        {/* Agent status chips */}
+        <div className="flex flex-wrap gap-1 mt-2">
+          {Object.entries(AGENT_DISPLAY).map(([id, cfg]) => {
+            const st = agentStatus[id as keyof AgentStatusMap]
+            const running = st?.status === 'running'
+            return (
+              <div key={id} style={{
+                fontFamily: C.mono, fontSize: '0.36rem', padding: '1px 5px',
+                border: `1px solid ${running ? cfg.color + '55' : 'rgba(255,255,255,0.06)'}`,
+                color: running ? cfg.color : C.dim, letterSpacing: 1,
+                background: running ? cfg.color + '0f' : 'transparent',
+                transition: 'all 0.3s ease',
+              }}>
+                {running ? '▶' : '○'} {cfg.label}
+              </div>
+            )
+          })}
         </div>
       </div>
 
-      {/* ── BOTTOM HALF: CONSOLE LOGS / LIVE CAMS ── */}
-      <div style={{
-        height: '50%', display: 'flex', flexDirection: 'column',
-        background: 'rgba(0,0,0,0.35)',
-      }}>
-        {/* Tab header */}
-        <div style={{
-          padding: '8px 14px',
-          borderBottom: `1px solid ${D.borderMed}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          flexShrink: 0,
-        }}>
-          <div style={{ display: 'flex', gap: 3 }}>
-            {(['console', 'cams'] as const).map(t => (
-              <button key={t} onClick={() => setBottomTab(t)} style={{
-                fontFamily: D.display, fontSize: '0.5rem', letterSpacing: '0.12em',
-                textTransform: 'uppercase', padding: '3px 9px',
-                cursor: 'pointer', transition: 'all 0.15s',
-                color: bottomTab === t ? D.cyan : 'rgba(255,255,255,0.3)',
-                background: bottomTab === t ? 'rgba(0,242,255,0.07)' : 'transparent',
-                border: bottomTab === t ? `1px solid ${D.borderCyan}` : '1px solid transparent',
-                fontWeight: bottomTab === t ? 600 : 400,
-              }}>
-                {t === 'console' ? 'Console Logs' : '📡 Live Cams'}
-              </button>
-            ))}
+      {/* Scrollable feed */}
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }} className="event-scroll">
+        {items.length === 0 ? (
+          <div style={{
+            padding: '32px 16px', textAlign: 'center',
+            fontFamily: C.mono, fontSize: '0.46rem', color: C.muted, letterSpacing: 2,
+          }}>
+            <div style={{ marginBottom: 8, animation: 'pulse 2s ease infinite' }}>◎</div>
+            ACQUIRING INTEL...
           </div>
-          {/* Terminal icon */}
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ opacity: 0.3 }}>
-            <rect x="1" y="1" width="11" height="11" rx="1" stroke="white" strokeWidth="1" />
-            <path d="M3.5 5L5.5 7L3.5 9" stroke="white" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M7 9H9.5" stroke="white" strokeWidth="1" strokeLinecap="round" />
-          </svg>
-        </div>
+        ) : (
+          items.map((item, idx) => (
+            <EventCard
+              key={`${item.fetchedAt}-${idx}`}
+              item={item}
+              selected={selectedEvent?.headline === item.headline}
+              onClick={() => onSelect(item)}
+            />
+          ))
+        )}
 
-        {/* Content */}
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {bottomTab === 'console' ? (
-            <>
-              <ConsoleLogs logs={logs} />
-              {/* Command input */}
-              <div style={{
-                padding: '6px 12px',
-                borderTop: `1px solid ${D.border}`,
-                flexShrink: 0,
-              }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'rgba(255,255,255,0.04)',
-                  padding: '5px 9px',
-                  border: `1px solid ${D.border}`,
-                }}>
-                  <span style={{ fontFamily: D.mono, fontSize: '0.62rem', color: D.cyan, opacity: 0.7 }}>$</span>
-                  <input
-                    value={cmd}
-                    onChange={e => setCmd(e.target.value)}
-                    placeholder="Enter command..."
-                    style={{
-                      flex: 1, background: 'transparent',
-                      border: 'none', outline: 'none',
-                      fontFamily: D.mono, fontSize: '0.55rem',
-                      color: 'rgba(241,245,249,0.6)',
-                    }}
-                  />
-                </div>
-              </div>
-            </>
-          ) : (
-            <div style={{ padding: '8px 10px', overflowY: 'auto', flex: 1 }}>
-              <WebcamViewer feeds={WEBCAM_FEEDS} activeIndex={camIndex} onNext={nextCam} onPrev={prevCam} />
-              {/* News streams */}
-              <div style={{ marginTop: 10 }}>
-                <div style={{
-                  fontFamily: D.mono, fontSize: '0.46rem',
-                  color: 'rgba(255,255,255,0.28)', letterSpacing: '0.2em',
-                  textTransform: 'uppercase', marginBottom: 7,
-                }}>
-                  Live News Streams
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {NEWS_STREAMS.map(ns => (
-                    <a
-                      key={ns.id}
-                      href={`https://www.youtube.com/watch?v=${ns.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        fontFamily: D.mono, fontSize: '0.42rem',
-                        color: ns.color, padding: '3px 8px',
-                        border: `1px solid ${ns.color}33`,
-                        textDecoration: 'none', letterSpacing: '0.08em',
-                      }}
-                    >
-                      {ns.name}
-                    </a>
-                  ))}
-                </div>
-              </div>
+        {/* Infinite scroll sentinel */}
+        <div ref={sentinelRef} style={{ padding: 8, textAlign: 'center' }}>
+          {loadingMore && (
+            <div style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>
+              <span style={{ animation: 'pulse 1s ease infinite' }}>▶▶▶</span> LOADING OLDER EVENTS
             </div>
           )}
         </div>
       </div>
+    </aside>
+  )
+}
 
-      {/* Coordinate bar */}
-      <div style={{
-        padding: '5px 12px',
-        background: 'rgba(0,0,0,0.35)',
-        borderTop: `1px solid ${D.border}`,
-        flexShrink: 0,
-      }}>
-        <span style={{
-          fontFamily: D.mono, fontSize: '0.42rem',
-          color: 'rgba(255,255,255,0.22)', letterSpacing: '0.05em', textTransform: 'uppercase',
-        }}>
-          {coords
-            ? `COORD: ${Math.abs(coords[0]).toFixed(4)}°${coords[0] >= 0 ? 'N' : 'S'}, ${Math.abs(coords[1]).toFixed(4)}°${coords[1] >= 0 ? 'E' : 'W'} | ALT: 35,786 KM | ORBIT: GEOSTATIONARY`
-            : 'COORD: 38.8977° N, 77.0365° W | ALT: 35,786 KM | ORBIT: GEOSTATIONARY'}
-        </span>
+// ─────────────────────────────────────────────────────────────────
+// RIGHT PANEL — TELEMETRY + WEBCAM + CONSOLE
+// ─────────────────────────────────────────────────────────────────
+function RightPanel({
+  logs, telemetry, selectedEvent,
+}: {
+  logs: LogEntry[]
+  telemetry: ReturnType<typeof useTelemetry>
+  selectedEvent: IntelItem | null
+}) {
+  const [streamIdx, setStreamIdx] = useState(0)
+  const stream = LIVE_STREAMS[streamIdx]
+  const logRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight
+    }
+  }, [logs])
+
+  return (
+    <aside style={{
+      width: 300, minWidth: 260,
+      height: '100%', display: 'flex', flexDirection: 'column',
+      background: C.panel,
+      borderLeft: `1px solid ${C.border}`,
+      flexShrink: 0,
+    }}>
+      {/* TELEMETRY SECTION */}
+      <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <div style={{ fontFamily: C.mono, fontSize: '0.44rem', color: C.muted, letterSpacing: 3, marginBottom: 10, fontWeight: 700 }}>
+          TELEMETRY
+        </div>
+        <MetricBar label="LATENCY"     value={telemetry.latency}    max={200}  color={telemetry.latency > 80 ? C.red : C.cyan}    unit="ms" />
+        <MetricBar label="UPLINK"      value={telemetry.uplink}     max={100}  color={C.green}   unit="%" />
+        <MetricBar label="PACKET LOSS" value={telemetry.packetLoss} max={10}   color={telemetry.packetLoss > 2 ? C.orange : C.cyan} unit="%" />
+        <MetricBar label="JITTER"      value={telemetry.jitter}     max={50}   color={telemetry.jitter > 15 ? C.yellow : C.cyan}   unit="ms" />
+
+        <div className="grid grid-cols-2 gap-2 mt-3" style={{ fontFamily: C.mono, fontSize: '0.4rem' }}>
+          <div style={{ background: 'rgba(0,229,255,0.04)', border: `1px solid ${C.border}`, padding: '4px 8px' }}>
+            <div style={{ color: C.muted, marginBottom: 1, letterSpacing: 1 }}>ENCRYPT</div>
+            <div style={{ color: C.green, fontWeight: 700 }}>{telemetry.encrypt}</div>
+          </div>
+          <div style={{ background: 'rgba(0,229,255,0.04)', border: `1px solid ${C.border}`, padding: '4px 8px' }}>
+            <div style={{ color: C.muted, marginBottom: 1, letterSpacing: 1 }}>PROTOCOL</div>
+            <div style={{ color: C.cyan, fontWeight: 700 }}>{telemetry.protocol}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* LIVE FEED / WEBCAM SECTION */}
+      <div style={{ borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        {/* Section header */}
+        <div style={{ padding: '8px 14px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.44rem', color: C.muted, letterSpacing: 3, fontWeight: 700 }}>
+            LIVE FEED
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setStreamIdx(i => (i - 1 + LIVE_STREAMS.length) % LIVE_STREAMS.length)}
+              style={{ fontFamily: C.mono, fontSize: '0.5rem', color: C.muted, padding: '0 4px', cursor: 'pointer', background: 'none', border: 'none' }}
+              className="hover:text-white"
+            >‹</button>
+            <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted }}>
+              {streamIdx + 1}/{LIVE_STREAMS.length}
+            </span>
+            <button
+              onClick={() => setStreamIdx(i => (i + 1) % LIVE_STREAMS.length)}
+              style={{ fontFamily: C.mono, fontSize: '0.5rem', color: C.muted, padding: '0 4px', cursor: 'pointer', background: 'none', border: 'none' }}
+              className="hover:text-white"
+            >›</button>
+          </div>
+        </div>
+
+        {/* Stream info */}
+        <div style={{ padding: '0 14px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.cyan, letterSpacing: 1 }}>
+            {stream.flag} {stream.name}
+          </span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.34rem', color: C.dim, marginLeft: 'auto' }}>
+            {stream.region}
+          </span>
+        </div>
+
+        {/* Stream tabs */}
+        <div style={{ display: 'flex', padding: '0 14px 8px', gap: 4, overflowX: 'auto' }}>
+          {LIVE_STREAMS.map((s, i) => (
+            <button
+              key={s.id}
+              onClick={() => setStreamIdx(i)}
+              style={{
+                fontFamily: C.mono, fontSize: '0.32rem',
+                padding: '2px 6px',
+                background: streamIdx === i ? `${C.cyan}18` : 'transparent',
+                border: `1px solid ${streamIdx === i ? C.borderCyan : C.border}`,
+                color: streamIdx === i ? C.cyan : C.dim,
+                cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                letterSpacing: 0.5,
+              }}
+            >
+              {s.flag}
+            </button>
+          ))}
+        </div>
+
+        <YouTubePlayer key={stream.id} videoId={stream.id} label={stream.name} />
+      </div>
+
+      {/* CONSOLE LOG */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div style={{ padding: '8px 14px 6px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.44rem', color: C.muted, letterSpacing: 3, fontWeight: 700 }}>
+            CONSOLE
+          </span>
+        </div>
+        <div
+          ref={logRef}
+          style={{ flex: 1, overflowY: 'auto', padding: '6px 14px' }}
+        >
+          {logs.map((log, i) => (
+            <div key={i} style={{
+              fontFamily: C.mono, fontSize: '0.46rem', lineHeight: 1.7, padding: '0.5px 0',
+              color: log.type === 'error' ? C.red
+                   : log.type === 'system' ? C.muted
+                   : log.type === 'success' ? C.green
+                   : C.cyan,
+              animation: 'fadeIn 0.2s ease',
+            }}>
+              <span style={{ color: C.dim, marginRight: 6 }}>{log.time}</span>
+              {log.message}
+            </div>
+          ))}
+        </div>
       </div>
     </aside>
   )
 }
 
-// ════════════════════════════════════════════════════════════
-// FOOTER
-// ════════════════════════════════════════════════════════════
-function Footer({ items }: { items: IntelItem[] }) {
-  const criticalCount = items.filter(i => i.severity >= 4).length
-  return (
-    <footer style={{
-      height: 30, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 24px', flexShrink: 0,
-      background: D.bgPanel, backdropFilter: 'blur(12px)',
-      borderTop: `1px solid ${D.borderMed}`,
-      zIndex: 50,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: D.green }} />
-          <span style={{ fontFamily: D.mono, fontSize: '0.48rem', color: D.textDim, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
-            Global Mesh: Online
-          </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ fontFamily: D.mono, fontSize: '0.48rem', color: D.textDim, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
-            Alerts:
-          </span>
-          <span style={{
-            fontFamily: D.mono, fontSize: '0.5rem', fontWeight: 700,
-            color: criticalCount > 0 ? D.red : D.green,
-            textTransform: 'uppercase', letterSpacing: '0.12em',
-          }}>
-            {criticalCount} Active
-          </span>
-        </div>
-      </div>
-      <div style={{
-        fontFamily: D.mono, fontSize: '0.42rem',
-        color: 'rgba(255,255,255,0.2)', letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-      }}>
-        COORD: 38.8977° N, 77.0365° W | ALT: 35,786 KM | ORBIT: GEOSTATIONARY
-      </div>
-    </footer>
-  )
-}
-
-// ════════════════════════════════════════════════════════════
-// LOG FACTORY
-// ════════════════════════════════════════════════════════════
-function makeLog(msg: string, type: LogEntry['type']): LogEntry {
-  return { time: new Date().toISOString().slice(11, 19), message: msg, type }
-}
-
-// ════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────
 // MAIN DASHBOARD
-// ════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────
 export default function LiveIntelDashboard() {
-  const [time, setTime] = useState(new Date())
-  const [items, setItems] = useState<IntelItem[]>([])
-  const [selected, setSelected] = useState<IntelItem | null>(null)
-  const [logs, setLogs] = useState<LogEntry[]>([])
-  const [agentStatuses, setAgentStatuses] = useState<AgentStatusMap>({})
-  const [connected, setConnected] = useState(true)
+  const [intelItems, setIntelItems] = useState<IntelItem[]>([])
+  const [selectedEvent, setSelectedEvent] = useState<IntelItem | null>(null)
+  const [agentStatus, setAgentStatus] = useState<AgentStatusMap>({})
+  const [sseConnected, setSseConnected] = useState(false)
+  const [page, setPage] = useState(1)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const agentRef = useRef<AgentManager | null>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
-  const agentManagerRef = useRef<AgentManager | null>(null)
+  const zuluTime  = useZuluClock()
+  const telemetry = useTelemetry()
   const { aircraft, fires } = useLiveData()
+  const { logs } = useConsole(intelItems)
+  const metrics   = useGlobalMetrics(intelItems.length)
 
-  // ── Live clock ──
+  // ── Agent manager init ──
   useEffect(() => {
-    const t = setInterval(() => setTime(new Date()), 1000)
-    return () => clearInterval(t)
+    const mgr = new AgentManager(
+      'server-side',
+      (payload) => {
+        const flat = Object.values(payload.intel).flat().filter(Boolean) as IntelItem[]
+        setIntelItems(prev => {
+          const combined = [...flat, ...prev]
+          const seen = new Set<string>()
+          return combined.filter(i => {
+            const key = i.headline.slice(0, 60).toLowerCase()
+            if (seen.has(key)) return false
+            seen.add(key); return true
+          }).slice(0, 500)
+        })
+      },
+      (progress) => setAgentStatus(prev => ({ ...prev, [progress.agentId]: progress })),
+      (_log) => { /* logs handled by useConsole */ }
+    )
+    agentRef.current = mgr
+    mgr.start()
+    return () => { mgr.stop() }
   }, [])
 
-  const addLog = useCallback((msg: string, type: LogEntry['type'] = 'system') => {
-    setLogs(prev => [...prev.slice(-90), makeLog(msg, type)])
-  }, [])
-
-  // ── SSE stream ──
+  // ── SSE connection ──
   useEffect(() => {
     let es: EventSource | null = null
-    let reconnectTimer: NodeJS.Timeout | null = null
+    let retry = 0
 
-    function connect() {
+    const connect = () => {
       try {
         es = new EventSource('/api/stream')
-        es.onopen = () => {
-          setConnected(true)
-          addLog('SSE stream connected — awaiting intel push', 'info')
-        }
+        es.addEventListener('connected', () => { setSseConnected(true); retry = 0 })
         es.addEventListener('intel', (e) => {
           try {
-            const data = JSON.parse(e.data)
-            if (Array.isArray(data)) {
-              setItems(prev => {
-                const existing = new Set(prev.map(x => x.headline))
-                const novel = data.filter(d => !existing.has(d.headline))
-                if (novel.length > 0) addLog(`Received ${novel.length} new intel event(s) via stream`, 'info')
-                return [...novel, ...prev].slice(0, 200)
-              })
-            }
+            const item = JSON.parse(e.data) as IntelItem
+            setIntelItems(prev => {
+              const key = item.headline.slice(0, 60).toLowerCase()
+              if (prev.some(p => p.headline.slice(0, 60).toLowerCase() === key)) return prev
+              return [item, ...prev].slice(0, 500)
+            })
           } catch {}
         })
         es.onerror = () => {
-          setConnected(false)
+          setSseConnected(false)
           es?.close()
-          reconnectTimer = setTimeout(connect, 8000)
+          const delay = Math.min(30000, 1000 * Math.pow(2, retry++))
+          setTimeout(connect, delay)
         }
-      } catch {
-        reconnectTimer = setTimeout(connect, 8000)
-      }
+      } catch {}
     }
-
     connect()
-    return () => {
-      es?.close()
-      if (reconnectTimer) clearTimeout(reconnectTimer)
-    }
-  }, [addLog])
+    return () => { es?.close() }
+  }, [])
 
-  // ── Agent manager ──
+  // ── Infinite scroll — IntersectionObserver ──
   useEffect(() => {
-    addLog('Initializing INTEL-LIVE v4.0.2 command center', 'system')
-    addLog('Handshake initiated with NODE::ALPHA-07', 'info')
-    addLog('Synchronizing global temporal buffers...', 'system')
+    if (!sentinelRef.current) return
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && !loadingMore && intelItems.length >= 20) {
+        setLoadingMore(true)
+        // Simulate fetching "older" events (re-use current + slight variation)
+        setTimeout(() => {
+          setPage(p => p + 1)
+          setLoadingMore(false)
+        }, 800)
+      }
+    }, { threshold: 0.1 })
+    obs.observe(sentinelRef.current)
+    return () => obs.disconnect()
+  }, [loadingMore, intelItems.length])
 
-    const agentManager = new AgentManager(
-      process.env.NEXT_PUBLIC_OPENROUTER_KEY || '',
-      (payload) => {
-        const allItems: IntelItem[] = Object.values(payload.intel).flat()
-        setItems(prev => {
-          const existing = new Set(prev.map(x => x.headline))
-          const novel = allItems.filter(x => !existing.has(x.headline))
-          if (novel.length > 0) addLog(`Intel cycle #${payload.cycle}: +${novel.length} events from ${payload.modelsUsed.length} models`, 'info')
-          return [...novel, ...prev].slice(0, 200)
-        })
-      },
-      (progress) => {
-        setAgentStatuses(prev => ({ ...prev, [progress.agentId]: progress }))
-        if (progress.status === 'running') addLog(`Agent ${progress.agentId.toUpperCase()} scanning: ${progress.message}`, 'system')
-        else if (progress.status === 'done') addLog(`Agent ${progress.agentId.toUpperCase()} completed — ${progress.count || 0} events indexed`, 'info')
-        else if (progress.status === 'error') addLog(`Agent ${progress.agentId.toUpperCase()} error: ${progress.message}`, 'error')
-      },
-      (entry) => setLogs(prev => [...prev.slice(-90), entry])
-    )
+  // "Paginated" items (simulate loading older events by repeating with time offsets)
+  const displayItems = useMemo(() => {
+    if (page <= 1) return intelItems
+    // For pagination > 1, append duplicates with older timestamps (simulate historical data)
+    const extra = intelItems.slice(0, Math.min(20, intelItems.length)).map((item, i) => ({
+      ...item,
+      headline: item.headline,
+      time: `${Math.max(0, parseInt(item.time?.split(':')[0] || '00') - page)}:${item.time?.split(':').slice(1).join(':') || '00:00Z'}`,
+      fetchedAt: item.fetchedAt - page * 3600000,
+    }))
+    return [...intelItems, ...extra]
+  }, [intelItems, page])
 
-    agentManagerRef.current = agentManager
-    agentManager.start()
+  const handleSelectEvent = useCallback((item: IntelItem) => {
+    setSelectedEvent(item)
+  }, [])
 
-    // ── Simulated boot-up logs ──
-    const sysLogs = [
-      { msg: 'High jitter detected on satellite link 4-B', type: 'error' as const, delay: 3200 },
-      { msg: 'Establishing encrypted tunnel to primary relay...', type: 'info' as const, delay: 6400 },
-      { msg: 'AES-256 encryption layer active on all channels', type: 'system' as const, delay: 9100 },
-      { msg: 'Auto-rerouting traffic through NODE::SIGMA-04', type: 'system' as const, delay: 12500 },
-      { msg: 'Uplink stability restored — all systems nominal', type: 'info' as const, delay: 15800 },
-      { msg: 'Scanning for new incidents_', type: 'system' as const, delay: 18000 },
-    ]
-    const timers = sysLogs.map(({ msg, type, delay }) => setTimeout(() => addLog(msg, type), delay))
-
-    return () => {
-      agentManager.stop()
-      timers.forEach(clearTimeout)
-    }
-  }, [addLog])
+  // Global load color
+  const loadColor = metrics.load > 75 ? C.red : metrics.load > 55 ? C.orange : C.green
+  const defconColor = [C.green, C.green, C.yellow, C.orange, C.red][metrics.defcon - 1] || C.green
 
   return (
     <div style={{
-      height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      background: D.bg, color: D.text,
-      fontFamily: D.display,
+      width: '100vw', height: '100vh',
+      display: 'flex', flexDirection: 'column',
+      background: C.bg, overflow: 'hidden',
+      fontFamily: C.sans,
     }}>
-      {/* Scanline overlay */}
-      <div style={{
-        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 9999,
-        backgroundImage: `linear-gradient(to bottom, transparent 50%, rgba(0,242,255,0.018) 50%)`,
-        backgroundSize: '100% 4px',
-      }} />
+      {/* ═══════════════════════════════════════════
+          TOP HEADER BAR
+      ═══════════════════════════════════════════ */}
+      <header style={{
+        height: 44, flexShrink: 0,
+        display: 'flex', alignItems: 'center',
+        padding: '0 16px',
+        background: 'rgba(2,4,12,0.98)',
+        borderBottom: `1px solid ${C.border}`,
+        gap: 16,
+        zIndex: 50,
+      }}>
+        {/* Logo */}
+        <div className="flex items-center gap-2.5" style={{ flexShrink: 0 }}>
+          <div style={{
+            width: 8, height: 8, borderRadius: '50%',
+            background: C.cyan, boxShadow: `0 0 12px ${C.cyan}`,
+            animation: 'pulse 2.5s ease infinite',
+          }} />
+          <span style={{ fontFamily: C.mono, fontSize: '0.72rem', color: C.text, fontWeight: 700, letterSpacing: 3 }}>
+            INTEL
+          </span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.72rem', color: C.cyan, fontWeight: 700, letterSpacing: 3 }}>
+            LIVE
+          </span>
+        </div>
 
-      {/* Header */}
-      <Header time={time} connected={connected} />
+        {/* Divider */}
+        <div style={{ width: 1, height: 20, background: C.border, flexShrink: 0 }} />
 
-      {/* Main 3-column body */}
-      <main style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
-        <LeftPanel items={items} selected={selected} onSelect={setSelected} />
-        <CenterPanel
-          items={items}
-          selected={selected}
-          onSelect={setSelected}
-          aircraft={aircraft}
-          fires={fires}
+        {/* ZULU clock */}
+        <div className="flex items-center gap-1.5">
+          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>ZULU</span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.58rem', color: C.cyan, letterSpacing: 2, fontWeight: 600 }}>
+            {zuluTime}
+          </span>
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, height: 20, background: C.border, flexShrink: 0 }} />
+
+        {/* SSE status */}
+        <div className="flex items-center gap-1.5">
+          <div style={{
+            width: 5, height: 5, borderRadius: '50%',
+            background: sseConnected ? C.green : C.red,
+            boxShadow: `0 0 6px ${sseConnected ? C.green : C.red}`,
+            animation: 'pulse 2s ease infinite',
+          }} />
+          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: sseConnected ? C.green : C.red, letterSpacing: 2 }}>
+            {sseConnected ? 'STREAM ACTIVE' : 'RECONNECTING'}
+          </span>
+        </div>
+
+        {/* Signal bars */}
+        <SignalBars strength={telemetry.signalStrength} />
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* System status */}
+        <div style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>
+          SYSTEM STATUS
+        </div>
+        <div style={{
+          fontFamily: C.mono, fontSize: '0.42rem', color: C.green,
+          border: `1px solid ${C.green}33`, padding: '2px 8px', letterSpacing: 2,
+        }}>
+          NOMINAL
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, height: 20, background: C.border, flexShrink: 0 }} />
+
+        {/* Intel count */}
+        <div className="flex items-center gap-1.5">
+          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 1 }}>EVENTS</span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.52rem', color: C.cyan, fontWeight: 700 }}>
+            {intelItems.length}
+          </span>
+        </div>
+
+        {/* Connect button */}
+        <button style={{
+          fontFamily: C.mono, fontSize: '0.4rem',
+          color: C.cyan, border: `1px solid ${C.borderCyan}`,
+          padding: '3px 12px', background: 'rgba(0,229,255,0.06)',
+          cursor: 'pointer', letterSpacing: 2,
+          transition: 'all 0.2s ease',
+        }}
+          className="hover:!bg-cyan-500/10"
+        >
+          ● CONNECTED
+        </button>
+      </header>
+
+      {/* Breaking ticker */}
+      <BreakingTicker items={intelItems} />
+
+      {/* ═══════════════════════════════════════════
+          MAIN 3-COLUMN LAYOUT
+      ═══════════════════════════════════════════ */}
+      <main style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+        {/* LEFT — Incident Feed */}
+        <LeftPanel
+          items={displayItems}
+          selectedEvent={selectedEvent}
+          onSelect={handleSelectEvent}
+          agentStatus={agentStatus}
+          loadingMore={loadingMore}
+          sentinelRef={sentinelRef}
         />
-        <RightPanel logs={logs} items={items} />
+
+        {/* CENTER — 3D Globe */}
+        <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+          {/* Globe container */}
+          <div style={{ position: 'absolute', inset: 0 }}>
+            <Globe3D
+              intelItems={intelItems}
+              onSelectEvent={handleSelectEvent}
+              selectedEvent={selectedEvent}
+              aircraft={aircraft}
+              fires={fires}
+            />
+          </div>
+
+          {/* Selected event overlay (bottom of globe) */}
+          {selectedEvent && (
+            <div style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0,
+              background: 'linear-gradient(to top, rgba(2,6,14,0.98) 0%, rgba(2,6,14,0.9) 60%, transparent 100%)',
+              padding: '32px 20px 16px',
+              animation: 'slideDown 0.3s ease',
+              pointerEvents: 'none',
+            }}>
+              <div className="flex items-start gap-3">
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 3,
+                  background: SEV_COLOR[selectedEvent.severity] || C.cyan,
+                  boxShadow: `0 0 10px ${SEV_COLOR[selectedEvent.severity] || C.cyan}`,
+                  animation: 'pulse 1.5s ease infinite',
+                }} />
+                <div>
+                  <div style={{ fontFamily: C.mono, fontSize: '0.4rem', color: SEV_COLOR[selectedEvent.severity] || C.cyan, letterSpacing: 3, marginBottom: 3 }}>
+                    {SEV_LABEL[selectedEvent.severity]} — {selectedEvent.location}
+                  </div>
+                  <div style={{ fontFamily: C.sans, fontSize: '0.82rem', fontWeight: 600, color: C.text, lineHeight: 1.4 }}>
+                    {selectedEvent.headline}
+                  </div>
+                  {selectedEvent.summary && (
+                    <div style={{ fontFamily: C.sans, fontSize: '0.6rem', color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                      {selectedEvent.summary.slice(0, 200)}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => setSelectedEvent(null)}
+                  style={{
+                    fontFamily: C.mono, fontSize: '0.7rem', color: C.muted,
+                    marginLeft: 'auto', flexShrink: 0, pointerEvents: 'auto',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                  }}
+                  className="hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Globe coordinate readout (top-right of globe) */}
+          <div style={{
+            position: 'absolute', top: 10, right: 10,
+            fontFamily: C.mono, fontSize: '0.38rem',
+            color: 'rgba(0,229,255,0.35)', letterSpacing: 2,
+            pointerEvents: 'none',
+          }}>
+            {selectedEvent ? (
+              <>
+                <div>LAT {selectedEvent.location?.toUpperCase().slice(0, 20)}</div>
+                <div>AGT {(selectedEvent.agentId || 'OSINT').toUpperCase()}</div>
+              </>
+            ) : (
+              <>
+                <div>AUTO ROTATE</div>
+                <div>GLOBAL VIEW</div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT — Telemetry + Webcam + Console */}
+        <RightPanel
+          logs={logs}
+          telemetry={telemetry}
+          selectedEvent={selectedEvent}
+        />
       </main>
 
-      {/* Footer */}
-      <Footer items={items} />
+      {/* ═══════════════════════════════════════════
+          BOTTOM STATUS BAR
+      ═══════════════════════════════════════════ */}
+      <footer style={{
+        height: 30, flexShrink: 0,
+        display: 'flex', alignItems: 'center',
+        padding: '0 16px', gap: 20,
+        background: 'rgba(2,4,12,0.98)',
+        borderTop: `1px solid ${C.border}`,
+      }}>
+        {/* Global load */}
+        <div className="flex items-center gap-2">
+          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>GLOBAL LOAD</span>
+          <div style={{ width: 60, height: 2, background: 'rgba(255,255,255,0.06)' }}>
+            <div style={{
+              height: '100%', width: `${metrics.load}%`,
+              background: `linear-gradient(90deg, ${loadColor}88, ${loadColor})`,
+              transition: 'width 1s ease',
+            }} />
+          </div>
+          <span style={{ fontFamily: C.mono, fontSize: '0.42rem', color: loadColor, fontWeight: 700 }}>
+            {Math.round(metrics.load)}%
+          </span>
+        </div>
+
+        <div style={{ width: 1, height: 14, background: C.border }} />
+
+        {/* Data rate */}
+        <div className="flex items-center gap-1.5">
+          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>DATA RATE</span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.42rem', color: C.cyan, fontWeight: 700 }}>
+            {metrics.dataRate} TB/s
+          </span>
+        </div>
+
+        <div style={{ width: 1, height: 14, background: C.border }} />
+
+        {/* DEFCON */}
+        <div className="flex items-center gap-1.5">
+          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>SECURITY</span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.42rem', color: defconColor, fontWeight: 700 }}>
+            DEFCON {metrics.defcon}
+          </span>
+        </div>
+
+        <div style={{ width: 1, height: 14, background: C.border }} />
+
+        {/* Threats */}
+        <div className="flex items-center gap-1.5">
+          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>THREATS</span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.42rem', color: intelItems.filter(i => i.severity >= 4).length > 0 ? C.orange : C.green, fontWeight: 700 }}>
+            {intelItems.filter(i => i.severity >= 4).length}
+          </span>
+        </div>
+
+        <div style={{ width: 1, height: 14, background: C.border }} />
+
+        {/* Latency */}
+        <div className="flex items-center gap-1.5">
+          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>LATENCY</span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.42rem', color: telemetry.latency > 80 ? C.red : C.green, fontWeight: 700 }}>
+            {Math.round(telemetry.latency)}ms
+          </span>
+        </div>
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* Source count */}
+        <span style={{ fontFamily: C.mono, fontSize: '0.36rem', color: C.dim, letterSpacing: 1 }}>
+          27 FEEDS ACTIVE
+        </span>
+        <div style={{ width: 1, height: 14, background: C.border }} />
+
+        {/* AI models */}
+        <span style={{ fontFamily: C.mono, fontSize: '0.36rem', color: C.dim, letterSpacing: 1 }}>
+          7 AI AGENTS
+        </span>
+        <div style={{ width: 1, height: 14, background: C.border }} />
+
+        {/* Version */}
+        <span style={{ fontFamily: C.mono, fontSize: '0.36rem', color: C.dim }}>
+          v9.0.0
+        </span>
+      </footer>
     </div>
   )
 }
