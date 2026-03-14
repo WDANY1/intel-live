@@ -101,3 +101,9 @@ export function recordPipelineRun(stats: PipelineStats): void {
   store.lastRunAt = stats.runAt
   store.lastStats = stats
 }
+
+// Returns true if last pipeline run was >10 minutes ago (or never ran)
+export function isStale(): boolean {
+  if (!store.lastRunAt) return true
+  return Date.now() - new Date(store.lastRunAt).getTime() > 10 * 60 * 1000
+}
