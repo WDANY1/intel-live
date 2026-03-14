@@ -1,493 +1,357 @@
-// ============================================================
-// INTEL LIVE — Agent System (REAL DATA + AI ANALYSIS)
-//
-// Data flow:
-//   1. Fetch REAL articles from 27+ RSS feeds (/api/rss)
-//   2. Classify + extract intel using keywords
-//   3. Fetch GDELT global event database (/api/events)
-//   4. Each agent runs AI analysis on its domain events
-//   5. Global strategic analysis via AI models
-//   6. Emit to UI + SSE eventStore
-//
-// AI providers (reads from Vercel env vars via /api/claude):
-//   OpenRouter → Groq → Cerebras → Mistral → Gemini → HuggingFace
-// ============================================================
+import { RawArticle, VerifiedEvent, Tier } from './types'
+import { getSourceByHandle } from './sources'
 
-import {
-  AGENTS,
-  AI_MODELS,
-  VERIFICATION_MODELS,
-} from './config'
-import { extractIntelFromRSS, deduplicateIntel } from './extraction'
-import { eventStore } from './cache'
-import type {
-  IntelItem,
-  AnalysisResult,
-  BreakingItem,
-  AgentProgress,
-  AgentUpdatePayload,
-  IntelMap,
-  LogEntry,
-  VerificationResult,
-  RSSArticle,
-  AgentId,
-} from './types'
-
-// ── Always use /api/claude — reads env vars on server ──
-const API_PATH = '/api/claude'
-
-function getBaseUrl(): string {
-  if (typeof window !== 'undefined') return ''
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
-  return 'http://localhost:3000'
-}
-
-function getModelName(modelId: string): string {
-  const m = AI_MODELS.find((ai) => ai.id === modelId)
-  return m ? `${m.icon} ${m.name}` : modelId
-}
-
-// ── Call AI via /api/claude (server reads env vars automatically) ──
-// Pass 'server-side' as key → server uses OPENROUTER_API_KEY / GROQ_API_KEY etc.
-async function callLLM(prompt: string, model: string): Promise<{ text: string; usedModel: string }> {
-  const res = await fetch(API_PATH, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': 'server-side', // server reads from process.env
-    },
-    body: JSON.stringify({ prompt, model }),
-    signal: AbortSignal.timeout(20000),
-  })
-
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}))
-    throw new Error(`API ${res.status}: ${(errData as any).error || 'Unknown'}`)
+// ─── AI API call with Groq primary → Gemini fallback ────────────────────────
+async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
+  // Try Groq first (fastest, most generous free tier)
+  if (process.env.GROQ_API_KEY) {
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user',   content: userMessage },
+          ],
+          temperature: 0.05,
+          max_tokens: 2048,
+          response_format: { type: 'json_object' },
+        }),
+        signal: AbortSignal.timeout(30000),
+      })
+      if (res.status === 429) throw new Error('RATE_LIMIT')
+      if (!res.ok) throw new Error(`Groq error ${res.status}`)
+      const data = await res.json()
+      return data.choices[0].message.content
+    } catch (err) {
+      if ((err as Error).message !== 'RATE_LIMIT') {
+        // Real error — fall through to Gemini
+      }
+    }
   }
 
-  const data = await res.json()
-  return { text: data.text || '', usedModel: data.model || model }
-}
-
-function parseJSON(raw: string): any {
-  if (!raw) return null
-  const clean = raw.replace(/```json|```/g, '').trim()
-  try { return JSON.parse(clean) } catch {}
-  const arrMatch = clean.match(/\[[\s\S]*?\]/)
-  if (arrMatch) try { return JSON.parse(arrMatch[0]) } catch {}
-  const objMatch = clean.match(/\{[\s\S]*\}/)
-  if (objMatch) try { return JSON.parse(objMatch[0]) } catch {}
-  return null
-}
-
-// ── Fetch REAL articles from all RSS feeds ──
-async function fetchRealRSSArticles(): Promise<RSSArticle[]> {
-  try {
-    const base = getBaseUrl()
-    const feeds = [
-      'bbc_me', 'bbc_world', 'aljazeera', 'aljazeera_me',
-      'times_israel', 'iran_intl', 'reuters_world', 'ap_top',
-      'al_monitor', 'war_zone', 'breaking_defense', 'defense_one',
-      'jpost', 'alarabiya', 'presstv', 'sky_news', 'dw_world',
-      'france24', 'guardian_world', 'middleeasteye', 'naval_news',
-      'military_times', 'euronews', 'nyt_world', 'wapo', 'cnn_world',
-    ].join(',')
-
-    const res = await fetch(`${base}/api/rss?feeds=${feeds}&limit=200`, {
-      signal: AbortSignal.timeout(18000),
-    })
-    if (!res.ok) return []
+  // Fallback: Google Gemini 2.0 Flash (free tier)
+  if (process.env.GEMINI_API_KEY) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ parts: [{ text: userMessage }] }],
+          generationConfig: {
+            temperature: 0.05,
+            maxOutputTokens: 2048,
+            responseMimeType: 'application/json',
+          },
+        }),
+        signal: AbortSignal.timeout(30000),
+      }
+    )
+    if (!res.ok) throw new Error(`Gemini error ${res.status}`)
     const data = await res.json()
-    return data.articles || []
-  } catch (err) {
-    console.error('[agents] RSS fetch error:', err)
-    return []
+    return data.candidates[0].content.parts[0].text
   }
+
+  throw new Error('No AI API key configured (GROQ_API_KEY or GEMINI_API_KEY required)')
 }
 
-// ── Fetch GDELT events ──
-async function fetchGDELTIntel(): Promise<IntelItem[]> {
+// ─── Safe JSON parse ─────────────────────────────────────────────────────────
+function safeJSON<T>(str: string, fallback: T): T {
   try {
-    const base = getBaseUrl()
-    const res = await fetch(`${base}/api/events`, {
-      signal: AbortSignal.timeout(10000),
-    })
-    if (!res.ok) return []
-    const data = await res.json()
-    const gdeltArticles: RSSArticle[] = (data.gdelt?.events || [])
-      .filter((e: any) => e.sourceurl)
-      .slice(0, 30)
-      .map((e: any) => ({
-        title: e.title || e.actor1name || 'GDELT Event',
-        description: `${e.actor1name || 'Unknown'} — ${e.actor2name || 'Unknown'}. ${e.sourceurl}`,
-        link: e.sourceurl,
-        pubDate: e.dateadded,
-        image: null,
-        source: 'gdelt',
-      }))
-    return extractIntelFromRSS(gdeltArticles)
+    const cleaned = str.replace(/```json\n?|```\n?/g, '').trim()
+    return JSON.parse(cleaned) as T
   } catch {
-    return []
+    return fallback
   }
 }
 
-// ── Per-agent AI analysis ──
-// Each agent analyzes its domain events and produces enriched summaries
-const AGENT_PROMPTS: Record<AgentId, string> = {
-  sigint: `You are SIGINT agent. Analyze these signals intelligence reports about electronic warfare, communications, radar, cyber operations. Extract the most operationally significant items.`,
-  osint: `You are OSINT agent. Analyze these open-source intelligence items from verified news feeds. Identify patterns, corroborate reports, assess reliability.`,
-  humint: `You are HUMINT agent. Analyze these human intelligence reports from officials, spokespeople, and insiders. Assess credibility and strategic significance.`,
-  geoint: `You are GEOINT agent. Analyze these geospatial intelligence items about troop movements, satellite imagery, territorial changes, base activities.`,
-  econint: `You are ECONINT agent. Analyze these economic intelligence items — oil prices, sanctions, trade disruptions, currency impacts, financial warfare.`,
-  proxy: `You are PROXY agent. Analyze Hezbollah, Hamas, Houthis, PMU, IRGC-proxy activities. Map the Iranian proxy network and assess operational tempo.`,
-  diplo: `You are DIPLO agent. Analyze diplomatic signals — UN statements, ambassador recalls, summit outcomes, back-channel communications, ceasefire prospects.`,
-}
+// ─── AGENT 1: Triage & Clustering ────────────────────────────────────────────
+const TRIAGE_PROMPT = `You are a military intelligence triage officer. You receive news articles about Middle East conflicts.
+Your ONLY job: group articles reporting the SAME specific event into clusters.
 
-async function runAgentAIAnalysis(
-  agentId: AgentId,
-  items: IntelItem[]
-): Promise<{ summary: string; keyFindings: string[]; threatLevel: number; model: string } | null> {
-  if (items.length === 0) return null
+CLUSTERING RULES:
+- Same event = same location + same type of action + within 3 hours of each other
+- Do NOT merge different events even in same country
+- Each cluster needs a brief topic label (max 12 words)
+- Minimum 1 article per cluster; prefer 2+
 
-  const bulletPoints = items
-    .sort((a, b) => b.severity - a.severity)
-    .slice(0, 8)
-    .map(i => `  [S${i.severity}] ${i.headline} | ${i.source} | ${i.time}`)
-    .join('\n')
-
-  const agentPrompt = AGENT_PROMPTS[agentId] || AGENT_PROMPTS.osint
-
-  const prompt = `${agentPrompt}
-
-INCOMING INTELLIGENCE (${items.length} items from real news feeds):
-${bulletPoints}
-
-Return ONLY valid JSON (no markdown):
+OUTPUT: Valid JSON only, no prose:
 {
-  "summary": "<2-sentence operational assessment in English>",
-  "keyFindings": ["<finding 1>", "<finding 2>", "<finding 3>"],
-  "threatLevel": <1-5>,
-  "confidence": <0-100>
+  "clusters": [
+    {
+      "topic": "short description of the event",
+      "location": "City, Country",
+      "articleIds": ["id1", "id2"]
+    }
+  ]
 }`
 
-  try {
-    const model = AI_MODELS[0].id // Use primary model
-    const { text, usedModel } = await callLLM(prompt, model)
-    const parsed = parseJSON(text)
-    if (!parsed) return null
+interface Cluster { topic: string; location: string; articleIds: string[] }
+
+async function triageAgent(articles: RawArticle[]): Promise<Cluster[]> {
+  if (articles.length === 0) return []
+
+  const payload = articles.map(a => ({
+    id: a.id, title: a.title,
+    source: a.sourceHandle, tier: a.sourceTier,
+    time: a.publishedAt, snippet: a.content.slice(0, 300),
+  }))
+
+  const result = await callAI(TRIAGE_PROMPT, JSON.stringify(payload))
+  const parsed = safeJSON<{ clusters: Cluster[] }>(result, { clusters: [] })
+  return parsed.clusters || []
+}
+
+// ─── AGENT 2: Fact-Check & Confidence Scoring ────────────────────────────────
+const FACTCHECK_PROMPT = `You are an OSINT fact-checking engine. You receive a cluster of articles about the same event.
+Calculate a confidence score using EXACT rules below.
+
+SOURCE TIER DEFINITIONS:
+- Tier 1 = Major wire services (Reuters, AP, AFP, BBC, Al Jazeera, France24, Guardian, Sky News)
+- Tier 2 = Regional news + institutional OSINT (Times of Israel, Al-Monitor, ISW, Bellingcat, Oryx, Iran Intl, Defense One)
+- Tier 3 = OSINT Twitter accounts (sentdefender, ELINTNews, clashreport, AuroraIntel, etc.)
+
+CONFIDENCE SCORE FORMULA (apply exactly):
+- 1x Tier 1 alone → 82-90, status: VERIFIED
+- 1x Tier 1 + any other → 90-97, status: VERIFIED
+- 3+ Tier 2 agree → 78-88, status: VERIFIED
+- 2x Tier 2 agree → 58-75, status: PROBABLE
+- 1x Tier 2 alone → 42-58, status: DEVELOPING
+- 3+ Tier 3 + 1x Tier 2 → 50-68, status: PROBABLE
+- 2-4x Tier 3 no Tier 1/2 → 28-45, status: DEVELOPING
+- 1x Tier 3 alone → 10-28, status: UNVERIFIED
+
+ANTI-HALLUCINATION RULES (CRITICAL):
+1. NEVER add details not in source texts
+2. If sources contradict, note both versions
+3. Output REJECT if event seems fabricated or inconsistent
+4. Do not speculate on casualties beyond sources
+
+OUTPUT: Valid JSON only:
+{
+  "confidenceScore": 74,
+  "status": "PROBABLE",
+  "shouldPublish": true,
+  "rejectionReason": null,
+  "notes": "Why this score was assigned"
+}`
+
+interface FactCheckResult {
+  confidenceScore: number
+  status: 'VERIFIED' | 'PROBABLE' | 'DEVELOPING' | 'UNVERIFIED'
+  shouldPublish: boolean
+  rejectionReason: string | null
+  notes: string
+}
+
+async function factCheckAgent(cluster: Cluster, articles: RawArticle[]): Promise<FactCheckResult | null> {
+  const clusterArticles = articles.filter(a => cluster.articleIds.includes(a.id))
+  if (clusterArticles.length === 0) return null
+
+  const payload = {
+    topic: cluster.topic,
+    location: cluster.location,
+    articles: clusterArticles.map(a => ({
+      title: a.title,
+      snippet: a.content.slice(0, 400),
+      source: a.sourceHandle,
+      tier: a.sourceTier,
+    })),
+  }
+
+  const result = await callAI(FACTCHECK_PROMPT, JSON.stringify(payload))
+  const parsed = safeJSON<FactCheckResult>(result, {
+    confidenceScore: 0, status: 'UNVERIFIED',
+    shouldPublish: false, rejectionReason: 'Parse error', notes: '',
+  })
+  return parsed
+}
+
+// ─── AGENT 3: Synthesis & Publishing ─────────────────────────────────────────
+const SYNTHESIS_PROMPT = `You are a neutral wire service editor (AP/Reuters style). Write a factual intelligence report.
+
+WRITING RULES:
+1. Headline: max 80 chars, past tense, neutral, no sensationalism
+   GOOD: "IDF intercepts ballistic missile over Red Sea"
+   BAD: "MASSIVE Israeli counterattack DESTROYS Houthi threat!"
+2. Summary: 2-3 sentences, strictly factual, state uncertainty explicitly
+3. Severity levels:
+   - CRITICAL (RED): active strikes, launches, confirmed 10+ casualties
+   - HIGH (ORANGE): skirmishes, movements, confirmed casualties, naval incidents
+   - MEDIUM (YELLOW): threats, diplomatic incidents, unconfirmed movements
+   - LOW (BLUE): sanctions, statements, exercises, arrests
+4. Category: STRIKE / MOVEMENT / DIPLOMATIC / INTELLIGENCE / OTHER
+5. Tags: 3-8 proper nouns/acronyms only
+6. Location: most specific place mentioned, format "City, Country"
+   Then estimate lat/lon from knowledge (1 decimal precision)
+7. Perspective: separate what each side claims (max 100 chars each)
+8. Quote: for each source, extract a verbatim 100-char snippet from their text
+
+OUTPUT: Valid JSON only:
+{
+  "headline": "...",
+  "summary": "...",
+  "severity": "HIGH",
+  "severityColor": "ORANGE",
+  "category": "STRIKE",
+  "tags": ["tag1", "tag2"],
+  "locationName": "City, Country",
+  "country": "Country",
+  "region": "Middle East",
+  "latitude": 32.1,
+  "longitude": 34.8,
+  "perspective": {
+    "sideA": "Iran/Hezbollah/Houthi/Hamas position",
+    "sideB": "Israel/IDF/US/Coalition position",
+    "neutral": "What is independently confirmed"
+  },
+  "sourceQuotes": {
+    "@handle": "verbatim quote max 120 chars"
+  }
+}`
+
+interface SynthesisResult {
+  headline: string
+  summary: string
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+  severityColor: 'RED' | 'ORANGE' | 'YELLOW' | 'BLUE'
+  category: 'STRIKE' | 'MOVEMENT' | 'DIPLOMATIC' | 'INTELLIGENCE' | 'OTHER'
+  tags: string[]
+  locationName: string
+  country: string
+  region: string
+  latitude: number
+  longitude: number
+  perspective: { sideA: string; sideB: string; neutral: string }
+  sourceQuotes: Record<string, string>
+}
+
+async function synthesisAgent(
+  cluster: Cluster,
+  factCheck: FactCheckResult,
+  articles: RawArticle[]
+): Promise<SynthesisResult | null> {
+  const clusterArticles = articles.filter(a => cluster.articleIds.includes(a.id))
+
+  const payload = {
+    topic: cluster.topic,
+    location: cluster.location,
+    confidenceScore: factCheck.confidenceScore,
+    status: factCheck.status,
+    articles: clusterArticles.map(a => ({
+      title: a.title,
+      content: a.content.slice(0, 500),
+      source: a.sourceHandle,
+      tier: a.sourceTier,
+    })),
+  }
+
+  const result = await callAI(SYNTHESIS_PROMPT, JSON.stringify(payload))
+  return safeJSON<SynthesisResult>(result, null as unknown as SynthesisResult)
+}
+
+// ─── Build final VerifiedEvent ────────────────────────────────────────────────
+function buildEvent(
+  cluster: Cluster,
+  factCheck: FactCheckResult,
+  synthesis: SynthesisResult,
+  articles: RawArticle[]
+): VerifiedEvent {
+  const clusterArticles = articles.filter(a => cluster.articleIds.includes(a.id))
+
+  const sources = clusterArticles.map(a => {
+    const src = getSourceByHandle(a.sourceHandle)
+    const quote = synthesis.sourceQuotes?.[a.sourceHandle] || a.title.slice(0, 120)
     return {
-      summary: parsed.summary || '',
-      keyFindings: parsed.keyFindings || [],
-      threatLevel: parsed.threatLevel || 2,
-      model: usedModel,
+      handle: a.sourceHandle,
+      tier: (src?.tier ?? a.sourceTier) as Tier,
+      url: a.url || `https://x.com/${a.sourceHandle.replace('@', '')}`,
+      quote,
     }
-  } catch (err: any) {
-    console.error(`[agents] ${agentId} AI error:`, err.message)
-    return null
-  }
-}
-
-// ── Global strategic analysis ──
-export async function runAnalysis(_apiKey: string, allIntel: IntelMap): Promise<AnalysisResult | null> {
-  const allItems = Object.values(allIntel).flat().filter(Boolean)
-  if (allItems.length === 0) return null
-
-  const summaryParts = Object.entries(allIntel)
-    .filter(([, items]) => items && items.length > 0)
-    .map(([agentId, items]) => {
-      const agent = AGENTS.find((a) => a.id === agentId)
-      const label = agent ? `${agent.icon} ${agent.fullName}` : agentId
-      const bullets = (items || [])
-        .sort((a, b) => (b.severity || 0) - (a.severity || 0))
-        .slice(0, 4)
-        .map(i => `  - [S${i.severity}] ${i.headline} (${i.source})`)
-        .join('\n')
-      return `${label}:\n${bullets}`
-    })
-    .join('\n\n')
-
-  const total = allItems.length
-  const critical = allItems.filter(i => i && i.severity >= 4).length
-  const sources = [...new Set(allItems.map(i => i.source).filter(Boolean))].slice(0, 10)
-
-  const prompt = `You are an elite military intelligence analyst reviewing REAL news from verified sources.
-
-${total} reports (${critical} critical) from: ${sources.join(', ')}
-
-${summaryParts}
-
-Based ONLY on these REAL reports, return ONLY valid JSON (no markdown):
-{"threat_level":<1-10>,"threat_label":"<DEFCON label>","situation_summary":"<3 sentences summarizing real events>","timeline_last_24h":["<4 real events from above>"],"next_hours_prediction":"<3 sentences prediction based on real trends>","next_days_prediction":"<3 sentences>","key_risks":["<5 risks based on real events>"],"escalation_probability":<0-100>,"nuclear_risk":<0-100>,"oil_impact":"<2 sentences>","proxy_status":"<2 sentences>","diplomatic_status":"<2 sentences>","civilian_impact":"<2 sentences>","breaking_alerts":["<3 real breaking headlines from above>"],"recommendation":"<2 sentences>"}`
-
-  try {
-    const { text } = await callLLM(prompt, AI_MODELS[0].id)
-    const result = parseJSON(text) as AnalysisResult | null
-    if (result) result._analysisModel = getModelName(AI_MODELS[0].id)
-    return result
-  } catch {
-    return null
-  }
-}
-
-// ── Verify intel item ──
-export async function verifyIntel(_apiKey: string, item: IntelItem): Promise<VerificationResult | null> {
-  const verifyPrompt = `Verify this news: "${item.headline}" — ${item.summary} (Source: ${item.source})
-Cross-check with Reuters, AP, BBC, Al Jazeera, Times of Israel, Iran International, Defense One.
-Return ONLY JSON: {"verified":<bool>,"confidence":<0-100>,"corroborating_sources":["<sources>"],"notes":"<brief note>"}`
-
-  const results = await Promise.allSettled(
-    VERIFICATION_MODELS.slice(0, 2).map(async (model) => {
-      try {
-        const { text, usedModel } = await callLLM(verifyPrompt, model)
-        const result = parseJSON(text)
-        if (result) result._model = getModelName(usedModel)
-        return result
-      } catch { return null }
-    })
-  )
-
-  const valid = results
-    .filter(r => r.status === 'fulfilled' && r.value)
-    .map(r => (r as PromiseFulfilledResult<any>).value)
-
-  if (valid.length === 0) return null
-
-  const verifiedCount = valid.filter((r: any) => r.verified).length
-  const avgConf = Math.round(valid.reduce((s: number, r: any) => s + (r.confidence || 0), 0) / valid.length)
-  const allSources = [...new Set(valid.flatMap((r: any) => r.corroborating_sources || []))]
+  })
 
   return {
-    verified: verifiedCount >= Math.ceil(valid.length / 2),
-    confidence: avgConf,
-    corroborating_sources: allSources as string[],
-    notes: (valid[0]?.notes as string) || '',
-    crossVerification: {
-      modelsQueried: VERIFICATION_MODELS.slice(0, 2).length,
-      modelsResponded: valid.length,
-      modelsConfirmed: verifiedCount,
-      modelNames: valid.map((r: any) => r._model).filter(Boolean) as string[],
-      consensus: verifiedCount === valid.length ? 'UNANIM CONFIRMAT'
-        : verifiedCount > 0 ? 'PARȚIAL CONFIRMAT'
-        : 'NECONFIRMAT',
-    },
+    id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    createdAt: new Date().toISOString(),
+    headline: synthesis.headline,
+    summary: synthesis.summary,
+    locationName: synthesis.locationName || cluster.location,
+    latitude: synthesis.latitude ?? 32.0,
+    longitude: synthesis.longitude ?? 35.0,
+    country: synthesis.country,
+    region: synthesis.region || 'Middle East',
+    severity: synthesis.severity,
+    severityColor: synthesis.severityColor,
+    category: synthesis.category,
+    sources,
+    confidenceScore: factCheck.confidenceScore,
+    status: factCheck.status,
+    tags: synthesis.tags || [],
+    perspective: synthesis.perspective || { sideA: '', sideB: '', neutral: '' },
   }
 }
 
-function extractBreakingFromReal(items: IntelItem[]): BreakingItem[] {
-  return items
-    .filter(i => i.severity >= 4)
-    .sort((a, b) => (b.fetchedAt || 0) - (a.fetchedAt || 0))
-    .slice(0, 8)
-    .map(i => ({ text: i.headline, severity: i.severity, time: i.time || 'recent' }))
-}
-
-// ═══════════════════════════════════════════════════════
-// AGENT MANAGER
-// ═══════════════════════════════════════════════════════
-export class AgentManager {
-  private onUpdate: (data: AgentUpdatePayload) => void
-  private onAgentStatus: (progress: AgentProgress) => void
-  private onLog: (entry: LogEntry) => void
-  private timers: ReturnType<typeof setInterval>[] = []
-  private running = false
-  public cycleCount = 0
-
-  // Keep backward-compat signature (apiKey arg kept but unused — server reads env vars)
-  constructor(
-    _apiKey: string,
-    onUpdate: (data: AgentUpdatePayload) => void,
-    onAgentStatus: (progress: AgentProgress) => void,
-    onLog: (entry: LogEntry) => void
-  ) {
-    this.onUpdate = onUpdate
-    this.onAgentStatus = onAgentStatus
-    this.onLog = onLog
+// ─── Master Pipeline Orchestrator ─────────────────────────────────────────────
+export async function runAgentPipeline(articles: RawArticle[]): Promise<{
+  events: VerifiedEvent[]
+  stats: { clustered: number; published: number; rejected: number; errors: string[] }
+}> {
+  if (articles.length === 0) {
+    return { events: [], stats: { clustered: 0, published: 0, rejected: 0, errors: [] } }
   }
 
-  private log(msg: string, type: LogEntry['type'] = 'info') {
-    this.onLog?.({ time: new Date().toISOString().slice(11, 19) + 'Z', message: msg, type })
-  }
-
-  async runFullCycle() {
-    this.cycleCount++
-    this.log(`── Cycle #${this.cycleCount} starting ──`, 'system')
-
-    try {
-      // STEP 1 — Fetch real RSS articles + GDELT
-      this.log(`Fetching RSS feeds + GDELT...`, 'info')
-      AGENTS.forEach(a => this.onAgentStatus?.({ agentId: a.id, status: 'running', message: 'Fetching data...', count: 0 }))
-
-      const [rssArticles, gdeltItems] = await Promise.all([
-        fetchRealRSSArticles(),
-        fetchGDELTIntel(),
-      ])
-
-      this.log(`${rssArticles.length} RSS articles fetched`, 'success')
-
-      // STEP 2 — Extract + deduplicate
-      const rawIntel = extractIntelFromRSS(rssArticles)
-      const dedupedIntel = deduplicateIntel([...rawIntel, ...gdeltItems])
-
-      this.log(`${dedupedIntel.length} unique events extracted (${gdeltItems.length} from GDELT)`, 'success')
-
-      // STEP 3 — Distribute by agent
-      const intelMap: IntelMap = {}
-      for (const agent of AGENTS) {
-        intelMap[agent.id] = dedupedIntel.filter(i => i.agentId === agent.id)
-      }
-      // Unclassified → OSINT
-      const unclassified = dedupedIntel.filter(i => !i.agentId)
-      if (unclassified.length > 0) {
-        intelMap['osint'] = [...(intelMap['osint'] || []), ...unclassified]
-      }
-
-      // Log per-agent counts
-      for (const agent of AGENTS) {
-        const count = (intelMap[agent.id] || []).length
-        this.onAgentStatus?.({ agentId: agent.id, status: 'done', count, message: `${count} items` })
-        if (count > 0) this.log(`${agent.id.toUpperCase()}: ${count} events`, 'info')
-      }
-
-      const breakingItems = extractBreakingFromReal(dedupedIntel)
-
-      // STEP 4 — Emit raw intel immediately (no waiting for AI)
-      this.onUpdate?.({
-        intel: intelMap,
-        analysis: null,
-        breaking: breakingItems,
-        timestamp: Date.now(),
-        cycle: this.cycleCount,
-        modelsUsed: ['RSS', 'GDELT'],
-      })
-
-      // Push new events to SSE store (server-side only)
-      if (typeof window === 'undefined') {
-        for (const item of dedupedIntel.slice(0, 20)) {
-          eventStore.push('intel', item)
-        }
-      }
-
-      this.log(`${dedupedIntel.length} events live — starting AI analysis...`, 'success')
-
-      // STEP 5 — Per-agent AI analysis (parallel, non-blocking)
-      // Each agent uses AI to analyze its domain
-      const agentAnalysisResults: Record<string, any> = {}
-
-      const agentTasks = AGENTS
-        .filter(agent => (intelMap[agent.id] || []).length > 0)
-        .map(async (agent) => {
-          this.onAgentStatus?.({ agentId: agent.id, status: 'running', message: 'AI analysis...', count: (intelMap[agent.id] || []).length })
-          try {
-            const result = await runAgentAIAnalysis(agent.id, intelMap[agent.id] || [])
-            if (result) {
-              agentAnalysisResults[agent.id] = result
-              this.log(`${agent.id.toUpperCase()} AI complete — threat: ${result.threatLevel}/5 [${result.model}]`, 'success')
-
-              // Enrich items with AI summary
-              intelMap[agent.id] = (intelMap[agent.id] || []).map(item => ({
-                ...item,
-                summary: result.keyFindings[0]
-                  ? `${result.summary} Key: ${result.keyFindings[0]}`
-                  : item.summary,
-                aiModel: result.model,
-                aiModelName: getModelName(result.model),
-                severity: Math.max(item.severity, result.threatLevel) as any,
-              }))
-            }
-          } catch (err: any) {
-            this.log(`${agent.id.toUpperCase()} AI error: ${err.message?.slice(0, 60)}`, 'error')
-          }
-          this.onAgentStatus?.({ agentId: agent.id, status: 'done', count: (intelMap[agent.id] || []).length, message: 'Done' })
-        })
-
-      // Run all agents in parallel (don't await — emit as they complete)
-      const agentPromise = Promise.allSettled(agentTasks).then(() => {
-        // Emit updated intel after all agents finish
-        this.onUpdate?.({
-          intel: intelMap,
-          analysis: null,
-          breaking: breakingItems,
-          timestamp: Date.now(),
-          cycle: this.cycleCount,
-          modelsUsed: ['RSS', 'GDELT', ...Object.values(agentAnalysisResults).map((r: any) => r.model).filter(Boolean)],
-        })
-        this.log('All agent AI analyses complete', 'success')
-      })
-
-      // STEP 6 — Global strategic analysis (runs while agents analyze)
-      const strategicPromise = runAnalysis('server-side', intelMap).then(analysis => {
-        if (analysis) {
-          this.log(`Strategic analysis complete — Threat: ${analysis.threat_level}/10 — ${analysis.threat_label}`, 'success')
-          this.onUpdate?.({
-            intel: intelMap,
-            analysis,
-            breaking: breakingItems,
-            timestamp: Date.now(),
-            cycle: this.cycleCount,
-            modelsUsed: ['RSS', 'GDELT', analysis._analysisModel || ''].filter(Boolean),
-          })
-        }
-      }).catch(err => this.log(`Strategic analysis error: ${err.message?.slice(0, 60)}`, 'error'))
-
-      // Await both
-      await Promise.allSettled([agentPromise, strategicPromise])
-
-      this.log(
-        `── Cycle #${this.cycleCount} complete — ${dedupedIntel.length} events from ${new Set(dedupedIntel.map(i => i.source)).size} sources ──`,
-        'success'
-      )
-
-    } catch (err: any) {
-      this.log(`Cycle #${this.cycleCount} error: ${err.message}`, 'error')
+  // Stage 1: Cluster articles
+  let clusters: Cluster[] = []
+  try {
+    clusters = await triageAgent(articles)
+  } catch (err) {
+    return {
+      events: [],
+      stats: { clustered: 0, published: 0, rejected: 0, errors: [`Triage failed: ${err}`] },
     }
   }
 
-  start(intervalSec = 180) {
-    if (this.running) return
-    this.running = true
-    this.log('INTEL LIVE — Agent system starting...', 'system')
-    this.log('Sources: BBC, Reuters, Al Jazeera, Times of Israel, Iran Intl, Defense One, War Zone...', 'info')
-    this.log('AI: OpenRouter → Groq → Cerebras → Mistral → Gemini → HuggingFace', 'system')
-    this.runFullCycle()
-    const timer = setInterval(() => {
-      if (this.running) this.runFullCycle()
-    }, intervalSec * 1000)
-    this.timers.push(timer)
+  const errors: string[] = []
+  let rejected = 0
+  const events: VerifiedEvent[] = []
+
+  // Stage 2+3: Process clusters (max 15 per run to stay within rate limits)
+  const toProcess = clusters.slice(0, 15)
+
+  // Process sequentially to avoid rate limit
+  for (const cluster of toProcess) {
+    try {
+      const factCheck = await factCheckAgent(cluster, articles)
+      if (!factCheck || !factCheck.shouldPublish || factCheck.confidenceScore < 15) {
+        rejected++
+        continue
+      }
+
+      // Small delay between AI calls
+      await new Promise(r => setTimeout(r, 150))
+
+      const synthesis = await synthesisAgent(cluster, factCheck, articles)
+      if (!synthesis || !synthesis.headline) {
+        rejected++
+        continue
+      }
+
+      events.push(buildEvent(cluster, factCheck, synthesis, articles))
+      await new Promise(r => setTimeout(r, 150))
+    } catch (err) {
+      errors.push(`Cluster "${cluster.topic}": ${err}`)
+    }
   }
 
-  stop() {
-    this.running = false
-    this.timers.forEach(clearInterval)
-    this.timers = []
-    this.log('Agent system stopped', 'system')
+  return {
+    events,
+    stats: { clustered: clusters.length, published: events.length, rejected, errors },
   }
-
-  async manualRefresh() {
-    this.log('Manual refresh triggered...', 'system')
-    await this.runFullCycle()
-  }
-}
-
-// ── Backward-compat exports ──
-export async function runAllAgents(
-  _apiKey: string,
-  onAgentProgress?: (p: AgentProgress) => void,
-  onPartialResults?: (results: IntelMap) => void
-): Promise<IntelMap> {
-  const articles = await fetchRealRSSArticles()
-  const rawIntel = extractIntelFromRSS(articles)
-  const dedupedIntel = deduplicateIntel(rawIntel)
-  const intelMap: IntelMap = {}
-  for (const agent of AGENTS) {
-    intelMap[agent.id] = dedupedIntel.filter(i => i.agentId === agent.id)
-    onAgentProgress?.({ agentId: agent.id, status: 'done', count: intelMap[agent.id].length, message: `${intelMap[agent.id].length} items` })
-  }
-  onPartialResults?.(intelMap)
-  return intelMap
-}
-
-export async function fetchBreakingNews(_apiKey: string): Promise<BreakingItem[]> {
-  const articles = await fetchRealRSSArticles()
-  const items = extractIntelFromRSS(articles)
-  return extractBreakingFromReal(items)
 }

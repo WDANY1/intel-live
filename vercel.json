@@ -3,5 +3,11 @@
   "installCommand": "npm install --legacy-peer-deps",
   "buildCommand": "next build",
   "devCommand": "next dev",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/cron/ingest",
+      "schedule": "*/10 * * * *"
+    }
+  ]
 }

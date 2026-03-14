@@ -1,50 +1,30 @@
-// ============================================================
-// API Route: /api/events — NASA EONET + GDELT combined events
-// Natural events + geopolitical events (free)
-// ============================================================
+import { NextRequest, NextResponse } from 'next/server'
+import { getEvents, getStats } from '@/lib/storage'
+import { MOCK_EVENTS } from '@/lib/mockData'
 
-import { NextResponse } from 'next/server'
-import { fetchNaturalEvents, fetchGDELTEvents } from '@/lib/livedata'
+export const runtime = 'nodejs'
+export const revalidate = 0
 
-export const maxDuration = 15
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 60)
 
-const CACHE_TTL = 300_000 // 5 minutes
-let cache: { data: any; ts: number } | null = null
+  let events = await getEvents(limit)
 
-export async function GET() {
-  try {
-    if (cache && Date.now() - cache.ts < CACHE_TTL) {
-      return NextResponse.json(cache.data, {
-        headers: { 'X-Cache': 'HIT', 'Cache-Control': 'public, s-maxage=300' },
-      })
-    }
-
-    const [natural, gdelt] = await Promise.allSettled([
-      fetchNaturalEvents(),
-      fetchGDELTEvents(),
-    ])
-
-    const result = {
-      timestamp: Date.now(),
-      natural: {
-        count: natural.status === 'fulfilled' ? natural.value.length : 0,
-        events: natural.status === 'fulfilled' ? natural.value : [],
-      },
-      gdelt: {
-        count: gdelt.status === 'fulfilled' ? gdelt.value.length : 0,
-        events: gdelt.status === 'fulfilled' ? gdelt.value : [],
-      },
-    }
-
-    cache = { data: result, ts: Date.now() }
-
-    return NextResponse.json(result, {
-      headers: { 'X-Cache': 'MISS', 'Cache-Control': 'public, s-maxage=300' },
-    })
-  } catch (err: any) {
-    return NextResponse.json(
-      { error: 'Failed to fetch events', details: err.message },
-      { status: 500 }
-    )
+  // Return mock data when store is empty (first load / dev)
+  if (events.length === 0) {
+    events = MOCK_EVENTS.slice(0, limit)
   }
+
+  const stats = await getStats()
+
+  return NextResponse.json(
+    { events, stats, timestamp: new Date().toISOString() },
+    {
+      headers: {
+        'Cache-Control': 'no-store, no-cache',
+        'Access-Control-Allow-Origin': '*',
+      },
+    }
+  )
 }
