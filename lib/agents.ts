@@ -1,65 +1,101 @@
 import { RawArticle, VerifiedEvent, Tier } from './types'
 import { getSourceByHandle } from './sources'
 
-// ─── AI API call with Groq primary → Gemini fallback ────────────────────────
+// ─── OpenAI-compatible call helper ───────────────────────────────────────────
+async function callOpenAICompat(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userMessage: string,
+  providerName: string,
+): Promise<string> {
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://intel-live.vercel.app',
+      'X-Title': 'Intel Live OSINT',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userMessage },
+      ],
+      temperature: 0.05,
+      max_tokens: 2048,
+      response_format: { type: 'json_object' },
+    }),
+    signal: AbortSignal.timeout(30000),
+  })
+  if (res.status === 429) throw new Error('RATE_LIMIT')
+  if (!res.ok) throw new Error(`${providerName} error ${res.status}`)
+  const data = await res.json()
+  return data.choices[0].message.content
+}
+
+// ─── AI API call: Groq → OpenRouter → Cerebras → Mistral ────────────────────
 async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
-  // Try Groq first (fastest, most generous free tier)
-  if (process.env.GROQ_API_KEY) {
+  const providers = [
+    // 1. Groq — fastest, 6000 req/day free
+    process.env.GROQ_API_KEY && {
+      name: 'Groq',
+      fn: () => callOpenAICompat(
+        'https://api.groq.com/openai/v1',
+        process.env.GROQ_API_KEY!,
+        'llama-3.3-70b-versatile',
+        systemPrompt, userMessage, 'Groq',
+      ),
+    },
+    // 2. OpenRouter — access to many free models
+    process.env.OPENROUTER_API_KEY && {
+      name: 'OpenRouter',
+      fn: () => callOpenAICompat(
+        'https://openrouter.ai/api/v1',
+        process.env.OPENROUTER_API_KEY!,
+        'meta-llama/llama-3.3-70b-instruct:free',
+        systemPrompt, userMessage, 'OpenRouter',
+      ),
+    },
+    // 3. Cerebras — very fast inference, free tier
+    process.env.CEREBRAS_API_KEY && {
+      name: 'Cerebras',
+      fn: () => callOpenAICompat(
+        'https://api.cerebras.ai/v1',
+        process.env.CEREBRAS_API_KEY!,
+        'llama-3.3-70b',
+        systemPrompt, userMessage, 'Cerebras',
+      ),
+    },
+    // 4. Mistral — free tier available
+    process.env.MISTRAL_API_KEY && {
+      name: 'Mistral',
+      fn: () => callOpenAICompat(
+        'https://api.mistral.ai/v1',
+        process.env.MISTRAL_API_KEY!,
+        'mistral-small-latest',
+        systemPrompt, userMessage, 'Mistral',
+      ),
+    },
+  ].filter(Boolean) as { name: string; fn: () => Promise<string> }[]
+
+  if (providers.length === 0) {
+    throw new Error('No AI API key configured. Set GROQ_API_KEY, OPENROUTER_API_KEY, CEREBRAS_API_KEY, or MISTRAL_API_KEY in Vercel.')
+  }
+
+  for (const provider of providers) {
     try {
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user',   content: userMessage },
-          ],
-          temperature: 0.05,
-          max_tokens: 2048,
-          response_format: { type: 'json_object' },
-        }),
-        signal: AbortSignal.timeout(30000),
-      })
-      if (res.status === 429) throw new Error('RATE_LIMIT')
-      if (!res.ok) throw new Error(`Groq error ${res.status}`)
-      const data = await res.json()
-      return data.choices[0].message.content
+      return await provider.fn()
     } catch (err) {
-      if ((err as Error).message !== 'RATE_LIMIT') {
-        // Real error — fall through to Gemini
-      }
+      const msg = (err as Error).message
+      console.warn(`[AI] ${provider.name} failed: ${msg} — trying next...`)
+      continue
     }
   }
 
-  // Fallback: Google Gemini 2.0 Flash (free tier)
-  if (process.env.GEMINI_API_KEY) {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ parts: [{ text: userMessage }] }],
-          generationConfig: {
-            temperature: 0.05,
-            maxOutputTokens: 2048,
-            responseMimeType: 'application/json',
-          },
-        }),
-        signal: AbortSignal.timeout(30000),
-      }
-    )
-    if (!res.ok) throw new Error(`Gemini error ${res.status}`)
-    const data = await res.json()
-    return data.candidates[0].content.parts[0].text
-  }
-
-  throw new Error('No AI API key configured (GROQ_API_KEY or GEMINI_API_KEY required)')
+  throw new Error('All AI providers failed or rate-limited')
 }
 
 // ─── Safe JSON parse ─────────────────────────────────────────────────────────
