@@ -406,10 +406,10 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
               animation: 'spin 0.9s linear infinite',
               margin: '0 auto 14px',
             }} />
-            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.5rem', color: '#00E5FF', letterSpacing: 6, textTransform: 'uppercase' }}>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.05rem', color: '#00E5FF', letterSpacing: 6, textTransform: 'uppercase' }}>
               INITIALIZING GLOBE
             </div>
-            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.36rem', color: 'rgba(0,229,255,0.3)', letterSpacing: 3, marginTop: 5 }}>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.76rem', color: 'rgba(0,229,255,0.3)', letterSpacing: 3, marginTop: 5 }}>
               NIGHT EARTH · ATMOSPHERE · CLOUD LAYER
             </div>
           </div>
@@ -425,7 +425,7 @@ function Globe3DInner({ intelItems, onSelectEvent, selectedEvent, aircraft = [],
       {ready && intelItems.length > 0 && (
         <div className="absolute bottom-3 left-3 z-10 pointer-events-none" style={{
           fontFamily: 'JetBrains Mono, monospace',
-          fontSize: '0.44rem',
+          fontSize: '0.92rem',
           color: 'rgba(0,229,255,0.45)',
           letterSpacing: 2,
         }}>
@@ -468,38 +468,38 @@ function EventPopupPanel({ popup, onClose }: { popup: EventPopup; onClose: () =>
             background: sev.color, boxShadow: `0 0 8px ${sev.color}`,
             animation: 'pulse 1.5s ease infinite',
           }} />
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.48rem', color: sev.color, letterSpacing: 3, fontWeight: 700 }}>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.01rem', color: sev.color, letterSpacing: 3, fontWeight: 700 }}>
             {sev.label}
           </span>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.42rem', color: 'rgba(255,255,255,0.3)', letterSpacing: 1 }}>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.88rem', color: 'rgba(255,255,255,0.3)', letterSpacing: 1 }}>
             [{(item.agentId || 'OSINT').toUpperCase()}]
           </span>
         </div>
         <button onClick={onClose}
-          style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.9rem', lineHeight: 1 }}
+          style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1.89rem', lineHeight: 1 }}
           className="hover:text-white transition-colors"
         >✕</button>
       </div>
 
       {/* Body */}
       <div className="px-3 py-2.5 space-y-2">
-        <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '0.72rem', fontWeight: 600, color: '#f1f5f9', lineHeight: 1.4 }}>
+        <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '1.51rem', fontWeight: 600, color: '#f1f5f9', lineHeight: 1.4 }}>
           {item.headline}
         </div>
 
-        <div className="flex items-center gap-2" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.42rem' }}>
+        <div className="flex items-center gap-2" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.88rem' }}>
           <span style={{ color: '#00E5FF' }}>◉</span>
           <span style={{ color: '#94a3b8' }}>{item.location || 'LOCATION UNKNOWN'}</span>
         </div>
 
         {item.summary && (
-          <div style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.62rem', color: '#64748b', lineHeight: 1.5, borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: 8 }}>
+          <div style={{ fontFamily: 'Inter, sans-serif', fontSize: '1.3rem', color: '#64748b', lineHeight: 1.5, borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: 8 }}>
             {item.summary.slice(0, 180)}{item.summary.length > 180 ? '…' : ''}
           </div>
         )}
 
         {/* Meta row */}
-        <div className="flex items-center justify-between pt-1" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.4rem', color: '#475569' }}>
+        <div className="flex items-center justify-between pt-1" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.84rem', color: '#475569' }}>
           <span>{item.source}</span>
           <span>{item.time}</span>
         </div>
@@ -508,7 +508,7 @@ function EventPopupPanel({ popup, onClose }: { popup: EventPopup; onClose: () =>
           <a href={item.link} target="_blank" rel="noopener noreferrer"
             style={{
               display: 'block', textAlign: 'center',
-              fontFamily: 'JetBrains Mono, monospace', fontSize: '0.42rem',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: '0.88rem',
               color: '#00E5FF', letterSpacing: 2, padding: '4px 0',
               borderTop: '1px solid rgba(0,229,255,0.1)',
               textDecoration: 'none',
@@ -533,8 +533,8 @@ class GlobeErrorBoundary extends Component<{ children: ReactNode }, { error: Err
         style={{ background: 'radial-gradient(ellipse at center, #081428 0%, #030810 70%)' }}
       >
         <div className="text-center">
-          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.6rem', color: '#FF3040', letterSpacing: 3 }}>GLOBE INIT FAILED</div>
-          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.42rem', color: 'rgba(255,255,255,0.25)', marginTop: 6 }}>
+          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.26rem', color: '#FF3040', letterSpacing: 3 }}>GLOBE INIT FAILED</div>
+          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.88rem', color: 'rgba(255,255,255,0.25)', marginTop: 6 }}>
             {this.state.error.message}
           </div>
         </div>
