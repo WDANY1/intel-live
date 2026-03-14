@@ -10,19 +10,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Intel Live design system
-        'bg-primary': '#060A0F',
-        'bg-secondary': '#0A0E14',
-        'bg-panel': '#0C1018',
-        'accent': '#00E5FF',
-        'alert': '#FF3B30',
-        'warning': '#FFB020',
-        'success': '#30D158',
-        'intel-purple': '#A78BFA',
+        // Intel Live design system (v4 — matching design reference)
+        'primary':          '#0d7ff2',
+        'accent-cyan':      '#00f2ff',
+        'accent-green':     '#00ff41',
+        'background-light': '#0a0a0a',
+        'background-dark':  '#000000',
+        'bg-panel':         'rgba(10,10,10,0.85)',
+        'alert':            '#FF3040',
+        'warning':          '#eab308',
       },
       fontFamily: {
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
-        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        mono:    ['JetBrains Mono', 'Fira Code', 'monospace'],
+        sans:    ['Space Grotesk', 'Inter', '-apple-system', 'sans-serif'],
         display: ['Space Grotesk', 'Inter', 'sans-serif'],
       },
       animation: {

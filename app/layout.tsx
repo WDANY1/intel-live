@@ -36,10 +36,14 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://unpkg.com" />
-        <link rel="prefetch" href="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg" as="image" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+          rel="stylesheet"
+        />
+        <link rel="prefetch" href="//unpkg.com/three-globe/example/img/earth-night.jpg" as="image" />
         <link rel="prefetch" href="//unpkg.com/three-globe/example/img/night-sky.png" as="image" />
       </head>
-      <body className="h-full overflow-hidden bg-[#060A0F] text-[#E5E7EB]">
+      <body className="h-full overflow-hidden bg-black text-[#f1f5f9]">
         {children}
       </body>
     </html>
