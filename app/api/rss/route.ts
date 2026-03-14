@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
     ? requestedFeeds.split(',').filter((k) => RSS_FEEDS[k])
     : Object.keys(RSS_FEEDS)
 
-  const feedsToFetch = feedKeys.slice(0, 8)
+  const feedsToFetch = feedKeys.slice(0, 20)
 
   try {
     const results = await Promise.allSettled(
