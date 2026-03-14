@@ -1,14 +1,10 @@
 import { RawArticle, VerifiedEvent, Tier } from './types'
 import { getSourceByHandle } from './sources'
 
-// ─── OpenAI-compatible call helper ───────────────────────────────────────────
-async function callOpenAICompat(
-  baseUrl: string,
-  apiKey: string,
-  model: string,
-  systemPrompt: string,
-  userMessage: string,
-  providerName: string,
+// ─── OpenAI-compatible POST helper ───────────────────────────────────────────
+async function oaiCall(
+  baseUrl: string, apiKey: string, model: string,
+  systemPrompt: string, userMessage: string, label: string,
 ): Promise<string> {
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
@@ -31,81 +27,90 @@ async function callOpenAICompat(
     signal: AbortSignal.timeout(30000),
   })
   if (res.status === 429) throw new Error('RATE_LIMIT')
-  if (!res.ok) throw new Error(`${providerName} error ${res.status}`)
+  if (!res.ok) throw new Error(`${label} ${res.status}`)
   const data = await res.json()
-  return data.choices[0].message.content
+  const content = data?.choices?.[0]?.message?.content
+  if (!content) throw new Error(`${label} empty response`)
+  return content
 }
 
-// ─── AI API call: Groq → OpenRouter → Cerebras → Mistral ────────────────────
-async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
-  const providers = [
-    // 1. Groq — fastest, 6000 req/day free
-    process.env.GROQ_API_KEY && {
-      name: 'Groq',
-      fn: () => callOpenAICompat(
-        'https://api.groq.com/openai/v1',
-        process.env.GROQ_API_KEY!,
-        'llama-3.3-70b-versatile',
-        systemPrompt, userMessage, 'Groq',
-      ),
-    },
-    // 2. OpenRouter — access to many free models
-    process.env.OPENROUTER_API_KEY && {
-      name: 'OpenRouter',
-      fn: () => callOpenAICompat(
-        'https://openrouter.ai/api/v1',
-        process.env.OPENROUTER_API_KEY!,
-        'meta-llama/llama-3.3-70b-instruct:free',
-        systemPrompt, userMessage, 'OpenRouter',
-      ),
-    },
-    // 3. Cerebras — very fast inference, free tier
-    process.env.CEREBRAS_API_KEY && {
-      name: 'Cerebras',
-      fn: () => callOpenAICompat(
-        'https://api.cerebras.ai/v1',
-        process.env.CEREBRAS_API_KEY!,
-        'llama-3.3-70b',
-        systemPrompt, userMessage, 'Cerebras',
-      ),
-    },
-    // 4. Mistral — free tier available
-    process.env.MISTRAL_API_KEY && {
-      name: 'Mistral',
-      fn: () => callOpenAICompat(
-        'https://api.mistral.ai/v1',
-        process.env.MISTRAL_API_KEY!,
-        'mistral-small-latest',
-        systemPrompt, userMessage, 'Mistral',
-      ),
-    },
-    // 5. HuggingFace — serverless inference, OpenAI-compatible
-    process.env.HF_API_KEY && {
-      name: 'HuggingFace',
-      fn: () => callOpenAICompat(
-        'https://api-inference.huggingface.co/models/meta-llama/Llama-3.3-70B-Instruct/v1',
-        process.env.HF_API_KEY!,
-        'meta-llama/Llama-3.3-70B-Instruct',
-        systemPrompt, userMessage, 'HuggingFace',
-      ),
-    },
-  ].filter(Boolean) as { name: string; fn: () => Promise<string> }[]
+// ─── Provider registry ────────────────────────────────────────────────────────
+interface Provider { name: string; baseUrl: string; key: string; model: string }
 
-  if (providers.length === 0) {
-    throw new Error('No AI API key configured. Set GROQ_API_KEY, OPENROUTER_API_KEY, CEREBRAS_API_KEY, or MISTRAL_API_KEY in Vercel.')
-  }
+function getProviders(mode: 'fast' | 'smart'): Provider[] {
+  const all: (Provider | false)[] = [
+    // ── FAST & FREE: Groq (6000 req/day, ~500 tok/s)
+    !!process.env.GROQ_API_KEY && {
+      name: 'Groq/Llama-3.3-70B',
+      baseUrl: 'https://api.groq.com/openai/v1',
+      key: process.env.GROQ_API_KEY!,
+      model: 'llama-3.3-70b-versatile',
+    },
+    // ── SMART: OpenRouter GPT-OSS 120B (best free model available Mar 2026)
+    !!process.env.OPENROUTER_API_KEY && mode === 'smart' && {
+      name: 'OpenRouter/GPT-OSS-120B',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      key: process.env.OPENROUTER_API_KEY!,
+      model: 'openai/gpt-oss-120b:free',
+    },
+    // ── SMART: NVIDIA Nemotron 120B (very strong, free)
+    !!process.env.OPENROUTER_API_KEY && mode === 'smart' && {
+      name: 'OpenRouter/Nemotron-120B',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      key: process.env.OPENROUTER_API_KEY!,
+      model: 'nvidia/nemotron-3-super-120b-a12b:free',
+    },
+    // ── Qwen3 80B — excellent reasoning (free)
+    !!process.env.OPENROUTER_API_KEY && {
+      name: 'OpenRouter/Qwen3-80B',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      key: process.env.OPENROUTER_API_KEY!,
+      model: 'qwen/qwen3-next-80b-a3b-instruct:free',
+    },
+    // ── Cerebras — fastest inference on earth (free tier)
+    !!process.env.CEREBRAS_API_KEY && {
+      name: 'Cerebras/Llama-3.3-70B',
+      baseUrl: 'https://api.cerebras.ai/v1',
+      key: process.env.CEREBRAS_API_KEY!,
+      model: 'llama-3.3-70b',
+    },
+    // ── Mistral Small (free tier)
+    !!process.env.MISTRAL_API_KEY && {
+      name: 'Mistral/Small',
+      baseUrl: 'https://api.mistral.ai/v1',
+      key: process.env.MISTRAL_API_KEY!,
+      model: 'mistral-small-latest',
+    },
+    // ── HuggingFace serverless
+    !!process.env.HF_API_KEY && {
+      name: 'HuggingFace/Llama-3.3-70B',
+      baseUrl: 'https://api-inference.huggingface.co/models/meta-llama/Llama-3.3-70B-Instruct/v1',
+      key: process.env.HF_API_KEY!,
+      model: 'meta-llama/Llama-3.3-70B-Instruct',
+    },
+  ]
+  return all.filter(Boolean) as Provider[]
+}
 
-  for (const provider of providers) {
+// ─── Main dispatcher — tries providers in order until one succeeds ────────────
+// mode='fast'  → Groq/Cerebras first (triage + synthesis — speed matters)
+// mode='smart' → 120B models first (fact-check — quality matters)
+async function callAI(
+  systemPrompt: string,
+  userMessage: string,
+  mode: 'fast' | 'smart' = 'fast',
+): Promise<string> {
+  const providers = getProviders(mode)
+  if (providers.length === 0) throw new Error('No AI API key configured.')
+
+  for (const p of providers) {
     try {
-      return await provider.fn()
+      return await oaiCall(p.baseUrl, p.key, p.model, systemPrompt, userMessage, p.name)
     } catch (err) {
-      const msg = (err as Error).message
-      console.warn(`[AI] ${provider.name} failed: ${msg} — trying next...`)
-      continue
+      console.warn(`[AI] ${p.name} failed: ${(err as Error).message}`)
     }
   }
-
-  throw new Error('All AI providers failed or rate-limited')
+  throw new Error('All AI providers exhausted')
 }
 
 // ─── Safe JSON parse ─────────────────────────────────────────────────────────
@@ -118,7 +123,6 @@ function safeJSON<T>(str: string, fallback: T): T {
   }
 }
 
-// ─── AGENT 1: Triage & Clustering ────────────────────────────────────────────
 const TRIAGE_PROMPT = `You are a military intelligence triage officer. You receive news articles about Middle East conflicts.
 Your ONLY job: group articles reporting the SAME specific event into clusters.
 
@@ -150,7 +154,7 @@ async function triageAgent(articles: RawArticle[]): Promise<Cluster[]> {
     time: a.publishedAt, snippet: a.content.slice(0, 300),
   }))
 
-  const result = await callAI(TRIAGE_PROMPT, JSON.stringify(payload))
+  const result = await callAI(TRIAGE_PROMPT, JSON.stringify(payload), 'fast')
   const parsed = safeJSON<{ clusters: Cluster[] }>(result, { clusters: [] })
   return parsed.clusters || []
 }
@@ -212,7 +216,7 @@ async function factCheckAgent(cluster: Cluster, articles: RawArticle[]): Promise
     })),
   }
 
-  const result = await callAI(FACTCHECK_PROMPT, JSON.stringify(payload))
+  const result = await callAI(FACTCHECK_PROMPT, JSON.stringify(payload), 'smart')
   const parsed = safeJSON<FactCheckResult>(result, {
     confidenceScore: 0, status: 'UNVERIFIED',
     shouldPublish: false, rejectionReason: 'Parse error', notes: '',
@@ -299,7 +303,7 @@ async function synthesisAgent(
     })),
   }
 
-  const result = await callAI(SYNTHESIS_PROMPT, JSON.stringify(payload))
+  const result = await callAI(SYNTHESIS_PROMPT, JSON.stringify(payload), 'fast')
   return safeJSON<SynthesisResult>(result, null as unknown as SynthesisResult)
 }
 
