@@ -79,6 +79,16 @@ async function callAI(systemPrompt: string, userMessage: string): Promise<string
         systemPrompt, userMessage, 'Mistral',
       ),
     },
+    // 5. HuggingFace — serverless inference, OpenAI-compatible
+    process.env.HF_API_KEY && {
+      name: 'HuggingFace',
+      fn: () => callOpenAICompat(
+        'https://api-inference.huggingface.co/models/meta-llama/Llama-3.3-70B-Instruct/v1',
+        process.env.HF_API_KEY!,
+        'meta-llama/Llama-3.3-70B-Instruct',
+        systemPrompt, userMessage, 'HuggingFace',
+      ),
+    },
   ].filter(Boolean) as { name: string; fn: () => Promise<string> }[]
 
   if (providers.length === 0) {
