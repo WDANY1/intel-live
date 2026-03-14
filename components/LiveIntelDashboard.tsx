@@ -18,7 +18,7 @@ const Globe3D = dynamic(() => import('./Globe3D'), {
           animation: 'spin 0.9s linear infinite',
           margin: '0 auto 12px',
         }} />
-        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.46rem', color: '#00E5FF', letterSpacing: 5 }}>
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.97rem', color: '#00E5FF', letterSpacing: 5 }}>
           LOADING GLOBE
         </div>
       </div>
@@ -254,27 +254,27 @@ function EventCard({ item, selected, onClick }: {
           }} />
           {/* Severity label */}
           <span style={{
-            fontFamily: C.mono, fontSize: '0.44rem', fontWeight: 700,
+            fontFamily: C.mono, fontSize: '0.92rem', fontWeight: 700,
             color, letterSpacing: 2,
           }}>
             {SEV_LABEL[item.severity] || 'INFO'}
           </span>
           {/* Agent badge */}
           <span style={{
-            fontFamily: C.mono, fontSize: '0.4rem', fontWeight: 600,
+            fontFamily: C.mono, fontSize: '0.84rem', fontWeight: 600,
             color: agent.color, opacity: 0.7, letterSpacing: 1,
           }}>
             [{agent.label}]
           </span>
         </div>
-        <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted }}>
+        <span style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.muted }}>
           {item.time}
         </span>
       </div>
 
       {/* Headline */}
       <div style={{
-        fontFamily: C.sans, fontSize: '0.72rem', fontWeight: 500,
+        fontFamily: C.sans, fontSize: '1.51rem', fontWeight: 500,
         color: selected ? '#f1f5f9' : '#cbd5e1', lineHeight: 1.4,
         marginBottom: 4,
       }}>
@@ -283,11 +283,11 @@ function EventCard({ item, selected, onClick }: {
 
       {/* Location + source */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1" style={{ fontFamily: C.mono, fontSize: '0.42rem', color: C.muted }}>
+        <div className="flex items-center gap-1" style={{ fontFamily: C.mono, fontSize: '0.88rem', color: C.muted }}>
           <span style={{ color: C.cyan, opacity: 0.6 }}>◉</span>
           <span>{item.location || 'LOCATION UNKNOWN'}</span>
         </div>
-        <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.dim }}>
+        <span style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.dim }}>
           {item.source?.slice(0, 12)}
         </span>
       </div>
@@ -295,11 +295,11 @@ function EventCard({ item, selected, onClick }: {
       {/* Category tag */}
       {item.category && (
         <div className="flex items-center gap-1 mt-1.5">
-          <span style={{ fontFamily: C.mono, fontSize: '0.4rem', color: C.muted }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.84rem', color: C.muted }}>
             {catIcon}
           </span>
           <span style={{
-            fontFamily: C.mono, fontSize: '0.38rem', color: C.dim,
+            fontFamily: C.mono, fontSize: '0.8rem', color: C.dim,
             background: 'rgba(255,255,255,0.04)', padding: '1px 5px',
             letterSpacing: 1,
           }}>
@@ -372,7 +372,7 @@ function YouTubePlayer({ videoId, label }: { videoId: string; label: string }) {
             animation: 'spin 0.9s linear infinite',
             marginBottom: 8,
           }} />
-          <span style={{ fontFamily: C.mono, fontSize: '0.4rem', color: 'rgba(0,229,255,0.5)', letterSpacing: 3 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.84rem', color: 'rgba(0,229,255,0.5)', letterSpacing: 3 }}>
             CONNECTING...
           </span>
         </div>
@@ -386,18 +386,18 @@ function YouTubePlayer({ videoId, label }: { videoId: string; label: string }) {
           background: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.9) 0px, rgba(0,0,0,0.9) 2px, rgba(4,8,18,0.95) 2px, rgba(4,8,18,0.95) 4px)',
         }}>
           <div style={{
-            fontFamily: C.mono, fontSize: '0.62rem', color: C.muted,
+            fontFamily: C.mono, fontSize: '1.3rem', color: C.muted,
             letterSpacing: 5, marginBottom: 6,
           }}>
             NO SIGNAL
           </div>
-          <div style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.dim, letterSpacing: 3, marginBottom: 12 }}>
+          <div style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.dim, letterSpacing: 3, marginBottom: 12 }}>
             ENCRYPTED FEED
           </div>
           <button
             onClick={() => setStatus('loading')}
             style={{
-              fontFamily: C.mono, fontSize: '0.38rem', color: C.cyan,
+              fontFamily: C.mono, fontSize: '0.8rem', color: C.cyan,
               border: `1px solid ${C.borderCyan}`, padding: '3px 10px',
               background: 'transparent', cursor: 'pointer', letterSpacing: 2,
             }}
@@ -419,7 +419,7 @@ function YouTubePlayer({ videoId, label }: { videoId: string; label: string }) {
             width: 5, height: 5, borderRadius: '50%', background: C.red,
             animation: 'pulse 1.5s ease infinite',
           }} />
-          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.red, letterSpacing: 2 }}>LIVE</span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.red, letterSpacing: 2 }}>LIVE</span>
         </div>
       )}
     </div>
@@ -436,8 +436,8 @@ function MetricBar({ label, value, max, color, unit }: {
   return (
     <div style={{ marginBottom: 8 }}>
       <div className="flex justify-between items-center mb-1">
-        <span style={{ fontFamily: C.mono, fontSize: '0.42rem', color: C.muted, letterSpacing: 2 }}>{label}</span>
-        <span style={{ fontFamily: C.mono, fontSize: '0.46rem', color, fontWeight: 700 }}>
+        <span style={{ fontFamily: C.mono, fontSize: '0.88rem', color: C.muted, letterSpacing: 2 }}>{label}</span>
+        <span style={{ fontFamily: C.mono, fontSize: '0.97rem', color, fontWeight: 700 }}>
           {typeof value === 'number' ? value.toFixed(value < 10 ? 1 : 0) : value}{unit}
         </span>
       </div>
@@ -490,7 +490,7 @@ function BreakingTicker({ items }: { items: IntelItem[] }) {
       height: 22, display: 'flex', alignItems: 'center',
     }}>
       <div style={{
-        fontFamily: C.mono, fontSize: '0.42rem', color: '#ff6080',
+        fontFamily: C.mono, fontSize: '0.88rem', color: '#ff6080',
         fontWeight: 700, padding: '0 10px', flexShrink: 0,
         borderRight: '1px solid rgba(255,32,64,0.25)',
         letterSpacing: 2,
@@ -500,7 +500,7 @@ function BreakingTicker({ items }: { items: IntelItem[] }) {
       <div style={{ overflow: 'hidden', flex: 1 }}>
         <div style={{
           display: 'inline-block',
-          fontFamily: C.mono, fontSize: '0.42rem', color: '#e2e8f0', letterSpacing: 0.5,
+          fontFamily: C.mono, fontSize: '0.88rem', color: '#e2e8f0', letterSpacing: 0.5,
           animation: 'tickerScroll 40s linear infinite',
           whiteSpace: 'nowrap',
         }}>
@@ -545,11 +545,11 @@ function LeftPanel({
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, boxShadow: `0 0 8px ${C.green}`, animation: 'pulse 2s ease infinite' }} />
-            <span style={{ fontFamily: C.mono, fontSize: '0.5rem', color: C.text, letterSpacing: 3, fontWeight: 700 }}>
+            <span style={{ fontFamily: C.mono, fontSize: '1.05rem', color: C.text, letterSpacing: 3, fontWeight: 700 }}>
               INCIDENT FEED
             </span>
           </div>
-          <span style={{ fontFamily: C.mono, fontSize: '0.4rem', color: C.muted, letterSpacing: 1 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.84rem', color: C.muted, letterSpacing: 1 }}>
             LIVE
           </span>
         </div>
@@ -557,16 +557,16 @@ function LeftPanel({
         {/* Event counts */}
         <div className="flex gap-3">
           <div className="flex items-center gap-1">
-            <span style={{ fontFamily: C.mono, fontSize: '0.5rem', color: C.red, fontWeight: 700 }}>{critCount}</span>
-            <span style={{ fontFamily: C.mono, fontSize: '0.36rem', color: C.muted, letterSpacing: 1 }}>CRITICAL</span>
+            <span style={{ fontFamily: C.mono, fontSize: '1.05rem', color: C.red, fontWeight: 700 }}>{critCount}</span>
+            <span style={{ fontFamily: C.mono, fontSize: '0.76rem', color: C.muted, letterSpacing: 1 }}>CRITICAL</span>
           </div>
           <div className="flex items-center gap-1">
-            <span style={{ fontFamily: C.mono, fontSize: '0.5rem', color: C.orange, fontWeight: 700 }}>{highCount}</span>
-            <span style={{ fontFamily: C.mono, fontSize: '0.36rem', color: C.muted, letterSpacing: 1 }}>HIGH</span>
+            <span style={{ fontFamily: C.mono, fontSize: '1.05rem', color: C.orange, fontWeight: 700 }}>{highCount}</span>
+            <span style={{ fontFamily: C.mono, fontSize: '0.76rem', color: C.muted, letterSpacing: 1 }}>HIGH</span>
           </div>
           <div className="flex items-center gap-1">
-            <span style={{ fontFamily: C.mono, fontSize: '0.5rem', color: C.cyan, fontWeight: 700 }}>{items.length}</span>
-            <span style={{ fontFamily: C.mono, fontSize: '0.36rem', color: C.muted, letterSpacing: 1 }}>TOTAL</span>
+            <span style={{ fontFamily: C.mono, fontSize: '1.05rem', color: C.cyan, fontWeight: 700 }}>{items.length}</span>
+            <span style={{ fontFamily: C.mono, fontSize: '0.76rem', color: C.muted, letterSpacing: 1 }}>TOTAL</span>
           </div>
         </div>
 
@@ -577,7 +577,7 @@ function LeftPanel({
             const running = st?.status === 'running'
             return (
               <div key={id} style={{
-                fontFamily: C.mono, fontSize: '0.36rem', padding: '1px 5px',
+                fontFamily: C.mono, fontSize: '0.76rem', padding: '1px 5px',
                 border: `1px solid ${running ? cfg.color + '55' : 'rgba(255,255,255,0.06)'}`,
                 color: running ? cfg.color : C.dim, letterSpacing: 1,
                 background: running ? cfg.color + '0f' : 'transparent',
@@ -595,7 +595,7 @@ function LeftPanel({
         {items.length === 0 ? (
           <div style={{
             padding: '32px 16px', textAlign: 'center',
-            fontFamily: C.mono, fontSize: '0.46rem', color: C.muted, letterSpacing: 2,
+            fontFamily: C.mono, fontSize: '0.97rem', color: C.muted, letterSpacing: 2,
           }}>
             <div style={{ marginBottom: 8, animation: 'pulse 2s ease infinite' }}>◎</div>
             ACQUIRING INTEL...
@@ -614,7 +614,7 @@ function LeftPanel({
         {/* Infinite scroll sentinel */}
         <div ref={sentinelRef} style={{ padding: 8, textAlign: 'center' }}>
           {loadingMore && (
-            <div style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>
+            <div style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.muted, letterSpacing: 2 }}>
               <span style={{ animation: 'pulse 1s ease infinite' }}>▶▶▶</span> LOADING OLDER EVENTS
             </div>
           )}
@@ -654,7 +654,7 @@ function RightPanel({
     }}>
       {/* TELEMETRY SECTION */}
       <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <div style={{ fontFamily: C.mono, fontSize: '0.44rem', color: C.muted, letterSpacing: 3, marginBottom: 10, fontWeight: 700 }}>
+        <div style={{ fontFamily: C.mono, fontSize: '0.92rem', color: C.muted, letterSpacing: 3, marginBottom: 10, fontWeight: 700 }}>
           TELEMETRY
         </div>
         <MetricBar label="LATENCY"     value={telemetry.latency}    max={200}  color={telemetry.latency > 80 ? C.red : C.cyan}    unit="ms" />
@@ -662,7 +662,7 @@ function RightPanel({
         <MetricBar label="PACKET LOSS" value={telemetry.packetLoss} max={10}   color={telemetry.packetLoss > 2 ? C.orange : C.cyan} unit="%" />
         <MetricBar label="JITTER"      value={telemetry.jitter}     max={50}   color={telemetry.jitter > 15 ? C.yellow : C.cyan}   unit="ms" />
 
-        <div className="grid grid-cols-2 gap-2 mt-3" style={{ fontFamily: C.mono, fontSize: '0.4rem' }}>
+        <div className="grid grid-cols-2 gap-2 mt-3" style={{ fontFamily: C.mono, fontSize: '0.84rem' }}>
           <div style={{ background: 'rgba(0,229,255,0.04)', border: `1px solid ${C.border}`, padding: '4px 8px' }}>
             <div style={{ color: C.muted, marginBottom: 1, letterSpacing: 1 }}>ENCRYPT</div>
             <div style={{ color: C.green, fontWeight: 700 }}>{telemetry.encrypt}</div>
@@ -678,21 +678,21 @@ function RightPanel({
       <div style={{ borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         {/* Section header */}
         <div style={{ padding: '8px 14px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontFamily: C.mono, fontSize: '0.44rem', color: C.muted, letterSpacing: 3, fontWeight: 700 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.92rem', color: C.muted, letterSpacing: 3, fontWeight: 700 }}>
             LIVE FEED
           </span>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setStreamIdx(i => (i - 1 + LIVE_STREAMS.length) % LIVE_STREAMS.length)}
-              style={{ fontFamily: C.mono, fontSize: '0.5rem', color: C.muted, padding: '0 4px', cursor: 'pointer', background: 'none', border: 'none' }}
+              style={{ fontFamily: C.mono, fontSize: '1.05rem', color: C.muted, padding: '0 4px', cursor: 'pointer', background: 'none', border: 'none' }}
               className="hover:text-white"
             >‹</button>
-            <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted }}>
+            <span style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.muted }}>
               {streamIdx + 1}/{LIVE_STREAMS.length}
             </span>
             <button
               onClick={() => setStreamIdx(i => (i + 1) % LIVE_STREAMS.length)}
-              style={{ fontFamily: C.mono, fontSize: '0.5rem', color: C.muted, padding: '0 4px', cursor: 'pointer', background: 'none', border: 'none' }}
+              style={{ fontFamily: C.mono, fontSize: '1.05rem', color: C.muted, padding: '0 4px', cursor: 'pointer', background: 'none', border: 'none' }}
               className="hover:text-white"
             >›</button>
           </div>
@@ -700,10 +700,10 @@ function RightPanel({
 
         {/* Stream info */}
         <div style={{ padding: '0 14px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.cyan, letterSpacing: 1 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.cyan, letterSpacing: 1 }}>
             {stream.flag} {stream.name}
           </span>
-          <span style={{ fontFamily: C.mono, fontSize: '0.34rem', color: C.dim, marginLeft: 'auto' }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.71rem', color: C.dim, marginLeft: 'auto' }}>
             {stream.region}
           </span>
         </div>
@@ -715,7 +715,7 @@ function RightPanel({
               key={s.id}
               onClick={() => setStreamIdx(i)}
               style={{
-                fontFamily: C.mono, fontSize: '0.32rem',
+                fontFamily: C.mono, fontSize: '0.67rem',
                 padding: '2px 6px',
                 background: streamIdx === i ? `${C.cyan}18` : 'transparent',
                 border: `1px solid ${streamIdx === i ? C.borderCyan : C.border}`,
@@ -735,7 +735,7 @@ function RightPanel({
       {/* CONSOLE LOG */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div style={{ padding: '8px 14px 6px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <span style={{ fontFamily: C.mono, fontSize: '0.44rem', color: C.muted, letterSpacing: 3, fontWeight: 700 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.92rem', color: C.muted, letterSpacing: 3, fontWeight: 700 }}>
             CONSOLE
           </span>
         </div>
@@ -745,7 +745,7 @@ function RightPanel({
         >
           {logs.map((log, i) => (
             <div key={i} style={{
-              fontFamily: C.mono, fontSize: '0.46rem', lineHeight: 1.7, padding: '0.5px 0',
+              fontFamily: C.mono, fontSize: '0.97rem', lineHeight: 1.7, padding: '0.5px 0',
               color: log.type === 'error' ? C.red
                    : log.type === 'system' ? C.muted
                    : log.type === 'success' ? C.green
@@ -900,10 +900,10 @@ export default function LiveIntelDashboard() {
             background: C.cyan, boxShadow: `0 0 12px ${C.cyan}`,
             animation: 'pulse 2.5s ease infinite',
           }} />
-          <span style={{ fontFamily: C.mono, fontSize: '0.72rem', color: C.text, fontWeight: 700, letterSpacing: 3 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '1.51rem', color: C.text, fontWeight: 700, letterSpacing: 3 }}>
             INTEL
           </span>
-          <span style={{ fontFamily: C.mono, fontSize: '0.72rem', color: C.cyan, fontWeight: 700, letterSpacing: 3 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '1.51rem', color: C.cyan, fontWeight: 700, letterSpacing: 3 }}>
             LIVE
           </span>
         </div>
@@ -913,8 +913,8 @@ export default function LiveIntelDashboard() {
 
         {/* ZULU clock */}
         <div className="flex items-center gap-1.5">
-          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>ZULU</span>
-          <span style={{ fontFamily: C.mono, fontSize: '0.58rem', color: C.cyan, letterSpacing: 2, fontWeight: 600 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.muted, letterSpacing: 2 }}>ZULU</span>
+          <span style={{ fontFamily: C.mono, fontSize: '1.22rem', color: C.cyan, letterSpacing: 2, fontWeight: 600 }}>
             {zuluTime}
           </span>
         </div>
@@ -930,7 +930,7 @@ export default function LiveIntelDashboard() {
             boxShadow: `0 0 6px ${sseConnected ? C.green : C.red}`,
             animation: 'pulse 2s ease infinite',
           }} />
-          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: sseConnected ? C.green : C.red, letterSpacing: 2 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.8rem', color: sseConnected ? C.green : C.red, letterSpacing: 2 }}>
             {sseConnected ? 'STREAM ACTIVE' : 'RECONNECTING'}
           </span>
         </div>
@@ -942,11 +942,11 @@ export default function LiveIntelDashboard() {
         <div style={{ flex: 1 }} />
 
         {/* System status */}
-        <div style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>
+        <div style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.muted, letterSpacing: 2 }}>
           SYSTEM STATUS
         </div>
         <div style={{
-          fontFamily: C.mono, fontSize: '0.42rem', color: C.green,
+          fontFamily: C.mono, fontSize: '0.88rem', color: C.green,
           border: `1px solid ${C.green}33`, padding: '2px 8px', letterSpacing: 2,
         }}>
           NOMINAL
@@ -957,15 +957,15 @@ export default function LiveIntelDashboard() {
 
         {/* Intel count */}
         <div className="flex items-center gap-1.5">
-          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 1 }}>EVENTS</span>
-          <span style={{ fontFamily: C.mono, fontSize: '0.52rem', color: C.cyan, fontWeight: 700 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.muted, letterSpacing: 1 }}>EVENTS</span>
+          <span style={{ fontFamily: C.mono, fontSize: '1.09rem', color: C.cyan, fontWeight: 700 }}>
             {intelItems.length}
           </span>
         </div>
 
         {/* Connect button */}
         <button style={{
-          fontFamily: C.mono, fontSize: '0.4rem',
+          fontFamily: C.mono, fontSize: '0.84rem',
           color: C.cyan, border: `1px solid ${C.borderCyan}`,
           padding: '3px 12px', background: 'rgba(0,229,255,0.06)',
           cursor: 'pointer', letterSpacing: 2,
@@ -1024,14 +1024,14 @@ export default function LiveIntelDashboard() {
                   animation: 'pulse 1.5s ease infinite',
                 }} />
                 <div>
-                  <div style={{ fontFamily: C.mono, fontSize: '0.4rem', color: SEV_COLOR[selectedEvent.severity] || C.cyan, letterSpacing: 3, marginBottom: 3 }}>
+                  <div style={{ fontFamily: C.mono, fontSize: '0.84rem', color: SEV_COLOR[selectedEvent.severity] || C.cyan, letterSpacing: 3, marginBottom: 3 }}>
                     {SEV_LABEL[selectedEvent.severity]} — {selectedEvent.location}
                   </div>
-                  <div style={{ fontFamily: C.sans, fontSize: '0.82rem', fontWeight: 600, color: C.text, lineHeight: 1.4 }}>
+                  <div style={{ fontFamily: C.sans, fontSize: '1.72rem', fontWeight: 600, color: C.text, lineHeight: 1.4 }}>
                     {selectedEvent.headline}
                   </div>
                   {selectedEvent.summary && (
-                    <div style={{ fontFamily: C.sans, fontSize: '0.6rem', color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                    <div style={{ fontFamily: C.sans, fontSize: '1.26rem', color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
                       {selectedEvent.summary.slice(0, 200)}
                     </div>
                   )}
@@ -1039,7 +1039,7 @@ export default function LiveIntelDashboard() {
                 <button
                   onClick={() => setSelectedEvent(null)}
                   style={{
-                    fontFamily: C.mono, fontSize: '0.7rem', color: C.muted,
+                    fontFamily: C.mono, fontSize: '1.47rem', color: C.muted,
                     marginLeft: 'auto', flexShrink: 0, pointerEvents: 'auto',
                     background: 'none', border: 'none', cursor: 'pointer',
                   }}
@@ -1054,7 +1054,7 @@ export default function LiveIntelDashboard() {
           {/* Globe coordinate readout (top-right of globe) */}
           <div style={{
             position: 'absolute', top: 10, right: 10,
-            fontFamily: C.mono, fontSize: '0.38rem',
+            fontFamily: C.mono, fontSize: '0.8rem',
             color: 'rgba(0,229,255,0.35)', letterSpacing: 2,
             pointerEvents: 'none',
           }}>
@@ -1092,7 +1092,7 @@ export default function LiveIntelDashboard() {
       }}>
         {/* Global load */}
         <div className="flex items-center gap-2">
-          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>GLOBAL LOAD</span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.muted, letterSpacing: 2 }}>GLOBAL LOAD</span>
           <div style={{ width: 60, height: 2, background: 'rgba(255,255,255,0.06)' }}>
             <div style={{
               height: '100%', width: `${metrics.load}%`,
@@ -1100,7 +1100,7 @@ export default function LiveIntelDashboard() {
               transition: 'width 1s ease',
             }} />
           </div>
-          <span style={{ fontFamily: C.mono, fontSize: '0.42rem', color: loadColor, fontWeight: 700 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.88rem', color: loadColor, fontWeight: 700 }}>
             {Math.round(metrics.load)}%
           </span>
         </div>
@@ -1109,8 +1109,8 @@ export default function LiveIntelDashboard() {
 
         {/* Data rate */}
         <div className="flex items-center gap-1.5">
-          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>DATA RATE</span>
-          <span style={{ fontFamily: C.mono, fontSize: '0.42rem', color: C.cyan, fontWeight: 700 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.muted, letterSpacing: 2 }}>DATA RATE</span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.88rem', color: C.cyan, fontWeight: 700 }}>
             {metrics.dataRate} TB/s
           </span>
         </div>
@@ -1119,8 +1119,8 @@ export default function LiveIntelDashboard() {
 
         {/* DEFCON */}
         <div className="flex items-center gap-1.5">
-          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>SECURITY</span>
-          <span style={{ fontFamily: C.mono, fontSize: '0.42rem', color: defconColor, fontWeight: 700 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.muted, letterSpacing: 2 }}>SECURITY</span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.88rem', color: defconColor, fontWeight: 700 }}>
             DEFCON {metrics.defcon}
           </span>
         </div>
@@ -1129,8 +1129,8 @@ export default function LiveIntelDashboard() {
 
         {/* Threats */}
         <div className="flex items-center gap-1.5">
-          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>THREATS</span>
-          <span style={{ fontFamily: C.mono, fontSize: '0.42rem', color: intelItems.filter(i => i.severity >= 4).length > 0 ? C.orange : C.green, fontWeight: 700 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.muted, letterSpacing: 2 }}>THREATS</span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.88rem', color: intelItems.filter(i => i.severity >= 4).length > 0 ? C.orange : C.green, fontWeight: 700 }}>
             {intelItems.filter(i => i.severity >= 4).length}
           </span>
         </div>
@@ -1139,8 +1139,8 @@ export default function LiveIntelDashboard() {
 
         {/* Latency */}
         <div className="flex items-center gap-1.5">
-          <span style={{ fontFamily: C.mono, fontSize: '0.38rem', color: C.muted, letterSpacing: 2 }}>LATENCY</span>
-          <span style={{ fontFamily: C.mono, fontSize: '0.42rem', color: telemetry.latency > 80 ? C.red : C.green, fontWeight: 700 }}>
+          <span style={{ fontFamily: C.mono, fontSize: '0.8rem', color: C.muted, letterSpacing: 2 }}>LATENCY</span>
+          <span style={{ fontFamily: C.mono, fontSize: '0.88rem', color: telemetry.latency > 80 ? C.red : C.green, fontWeight: 700 }}>
             {Math.round(telemetry.latency)}ms
           </span>
         </div>
@@ -1149,19 +1149,19 @@ export default function LiveIntelDashboard() {
         <div style={{ flex: 1 }} />
 
         {/* Source count */}
-        <span style={{ fontFamily: C.mono, fontSize: '0.36rem', color: C.dim, letterSpacing: 1 }}>
+        <span style={{ fontFamily: C.mono, fontSize: '0.76rem', color: C.dim, letterSpacing: 1 }}>
           27 FEEDS ACTIVE
         </span>
         <div style={{ width: 1, height: 14, background: C.border }} />
 
         {/* AI models */}
-        <span style={{ fontFamily: C.mono, fontSize: '0.36rem', color: C.dim, letterSpacing: 1 }}>
+        <span style={{ fontFamily: C.mono, fontSize: '0.76rem', color: C.dim, letterSpacing: 1 }}>
           7 AI AGENTS
         </span>
         <div style={{ width: 1, height: 14, background: C.border }} />
 
         {/* Version */}
-        <span style={{ fontFamily: C.mono, fontSize: '0.36rem', color: C.dim }}>
+        <span style={{ fontFamily: C.mono, fontSize: '0.76rem', color: C.dim }}>
           v9.0.0
         </span>
       </footer>
